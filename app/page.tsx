@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -17,7 +17,6 @@ import {
   Plus,
   Search,
   Send,
-  Settings,
   ShoppingCart,
   Sparkles,
   Trash2,
@@ -45,7 +44,10 @@ const MoneyFlowChart = dynamic(() => import("./MoneyFlowChart"), {
 type TransactionSpace = "personal" | "business";
 type SpaceFilter = "all" | TransactionSpace;
 type PeriodFilter = "today" | "week" | "month" | "all";
+type ActivePage = "dashboard" | "analytics";
 type InputMode = "quick" | "business";
+type HistoryTypeFilter = "all" | Transaction["type"];
+type HistorySort = "newest" | "oldest" | "amount-desc" | "amount-asc";
 type BusinessTransactionKind = "sale" | "material";
 type PaymentMethod = "cash" | "qris" | "transfer";
 type MaterialUnit = "pcs" | "kg" | "gram" | "liter" | "pack" | "lainnya";
@@ -109,11 +111,9 @@ const dummyTransactions: Transaction[] = [
 ];
 
 const navItems = [
-  { label: "Dashboard", icon: HomeIcon, active: true },
-  { label: "Transaksi", icon: CreditCard },
-  { label: "Analitik", icon: BarChart3 },
-  { label: "Pengaturan", icon: Settings },
-];
+  { label: "Dashboard", icon: HomeIcon, page: "dashboard" as const },
+  { label: "Analitik", icon: BarChart3, page: "analytics" as const },
+] satisfies { icon: typeof HomeIcon; label: string; page: ActivePage }[];
 
 const spaceOptions: { label: string; value: TransactionSpace }[] = [
   { label: "Pribadi", value: "personal" },
@@ -129,7 +129,21 @@ const periodFilterOptions: { label: string; value: PeriodFilter }[] = [
   { label: "Hari ini", value: "today" },
   { label: "Minggu ini", value: "week" },
   { label: "Bulan ini", value: "month" },
-  { label: "Semua", value: "all" },
+  { label: "Semua periode", value: "all" },
+];
+
+const historyTypeFilterOptions: { label: string; value: HistoryTypeFilter }[] =
+  [
+    { label: "Semua", value: "all" },
+    { label: "Pemasukan", value: "income" },
+    { label: "Pengeluaran", value: "expense" },
+  ];
+
+const historySortOptions: { label: string; value: HistorySort }[] = [
+  { label: "Terbaru", value: "newest" },
+  { label: "Terlama", value: "oldest" },
+  { label: "Nominal terbesar", value: "amount-desc" },
+  { label: "Nominal terkecil", value: "amount-asc" },
 ];
 
 function getSpaceLabel(space: TransactionSpace) {
@@ -152,11 +166,14 @@ function formatCurrency(amount: number) {
 }
 
 function formatDate(date: string) {
+  const normalizedDate = normalizeDateKey(date) ?? getTodayDateKey();
+  const [year, month, day] = normalizedDate.split("-").map(Number);
+
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "long",
     year: "numeric",
-  }).format(new Date(`${date}T00:00:00`));
+  }).format(new Date(year, month - 1, day));
 }
 
 function getTodayDateKey() {
@@ -172,13 +189,52 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function isValidDateKey(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
+function dateKeyToLocalDate(dateKey: string) {
+  const normalizedDate = normalizeDateKey(dateKey);
+
+  if (!normalizedDate) {
+    return null;
   }
 
-  const date = new Date(`${value}T00:00:00`);
-  return !Number.isNaN(date.getTime()) && toDateKey(date) === value;
+  const [year, month, day] = normalizedDate.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isValidDateKey(value: string) {
+  return normalizeDateKey(value) === value;
+}
+
+function normalizeDateKey(value: string) {
+  const trimmedValue = value.trim();
+  const isoMatch = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const localMatch = trimmedValue.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+
+  const parts = isoMatch
+    ? {
+        day: Number(isoMatch[3]),
+        month: Number(isoMatch[2]),
+        year: Number(isoMatch[1]),
+      }
+    : localMatch
+      ? {
+          day: Number(localMatch[1]),
+          month: Number(localMatch[2]),
+          year: Number(localMatch[3]),
+        }
+      : null;
+
+  if (!parts) {
+    return null;
+  }
+
+  const date = new Date(parts.year, parts.month - 1, parts.day);
+  const normalized = toDateKey(date);
+
+  return date.getFullYear() === parts.year &&
+    date.getMonth() === parts.month - 1 &&
+    date.getDate() === parts.day
+    ? normalized
+    : null;
 }
 
 function getWeekRange(date: Date) {
@@ -209,10 +265,34 @@ function isInPeriod(date: string, period: PeriodFilter, todayKey: string) {
     return date === todayKey;
   }
 
-  const today = new Date(`${todayKey}T00:00:00`);
+  const today = dateKeyToLocalDate(todayKey) ?? new Date();
   const range = period === "week" ? getWeekRange(today) : getMonthRange(today);
 
   return date >= range.start && date <= range.end;
+}
+
+function getTransactionCreatedKey(transaction: Transaction) {
+  return Number(transaction.id.split("-")[0]) || 0;
+}
+
+function compareTransactionsByRecency(
+  first: Transaction,
+  second: Transaction,
+) {
+  const dateComparison = second.date.localeCompare(first.date);
+
+  if (dateComparison !== 0) {
+    return dateComparison;
+  }
+
+  const createdComparison =
+    getTransactionCreatedKey(second) - getTransactionCreatedKey(first);
+
+  if (createdComparison !== 0) {
+    return createdComparison;
+  }
+
+  return second.id.localeCompare(first.id);
 }
 
 function parseAmount(rawText: string) {
@@ -385,10 +465,11 @@ function createTransaction(
   const type = inferType(rawText);
   const amount = parseAmount(rawText);
   const trimmedText = rawText.trim();
+  const dateKey = normalizeDateKey(date) ?? getTodayDateKey();
 
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
-    date,
+    date: dateKey,
     type,
     space,
     category: inferCategory(trimmedText, type),
@@ -426,6 +507,7 @@ function createBusinessTransaction(
   form: BusinessForm,
   date = getTodayDateKey(),
 ): Transaction {
+  const dateKey = normalizeDateKey(date) ?? getTodayDateKey();
   const itemName = form.itemName.trim();
   const quantity = parsePositiveNumber(form.quantity);
   const unitPrice = parsePositiveNumber(form.unitPrice);
@@ -447,7 +529,7 @@ function createBusinessTransaction(
 
     return {
       id: `${Date.now()}-${crypto.randomUUID()}`,
-      date,
+      date: dateKey,
       type: "income",
       space: "business",
       category: "Penjualan",
@@ -470,7 +552,7 @@ function createBusinessTransaction(
 
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
-    date,
+    date: dateKey,
     type: "expense",
     space: "business",
     category: "Bahan/Modal",
@@ -505,8 +587,8 @@ function normalizeTransaction(value: unknown): Transaction | null {
       ? transaction.space
       : "business";
   const date =
-    typeof transaction.date === "string" && isValidDateKey(transaction.date)
-      ? transaction.date
+    typeof transaction.date === "string"
+      ? normalizeDateKey(transaction.date) ?? getTodayDateKey()
       : getTodayDateKey();
 
   return {
@@ -523,10 +605,12 @@ function normalizeTransaction(value: unknown): Transaction | null {
 
 function parseTransactions(stored: string | null) {
   if (!stored) {
+    console.log("parsedTransactions", dummyTransactions);
     return dummyTransactions;
   }
 
   if (stored === cachedStorageValue) {
+    console.log("parsedTransactions", cachedTransactions);
     return cachedTransactions;
   }
 
@@ -546,6 +630,7 @@ function parseTransactions(stored: string | null) {
     cachedTransactions = dummyTransactions;
   }
 
+  console.log("parsedTransactions", cachedTransactions);
   return cachedTransactions;
 }
 
@@ -574,23 +659,40 @@ function subscribeTransactions(listener: () => void) {
 
 function writeTransactions(transactions: Transaction[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+  cachedStorageValue = JSON.stringify(transactions);
+  cachedTransactions = transactions;
   window.dispatchEvent(new Event(STORAGE_EVENT));
 }
 
 export default function Home() {
-  const transactions = useSyncExternalStore(
-    subscribeTransactions,
-    getTransactionsSnapshot,
-    () => dummyTransactions,
-  );
+  const [transactions, setTransactions] =
+    useState<Transaction[]>(dummyTransactions);
   const [rawText, setRawText] = useState("");
   const [quickFeedback, setQuickFeedback] = useState("");
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today");
-  const [transactionDate, setTransactionDate] = useState(getTodayDateKey);
+  const [activePage, setActivePage] = useState<ActivePage>("dashboard");
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyCategoryFilter, setHistoryCategoryFilter] = useState("all");
+  const [historyTypeFilter, setHistoryTypeFilter] =
+    useState<HistoryTypeFilter>("all");
+  const [historySort, setHistorySort] = useState<HistorySort>("newest");
+  const [selectedDate, setSelectedDate] = useState(getTodayDateKey);
   const [inputMode, setInputMode] = useState<InputMode>("quick");
   const [businessForm, setBusinessForm] =
     useState<BusinessForm>(initialBusinessForm);
+
+  useEffect(() => {
+    const syncTransactions = () => {
+      const parsedTransactions = getTransactionsSnapshot();
+      setTransactions(parsedTransactions);
+    };
+
+    syncTransactions();
+    return subscribeTransactions(syncTransactions);
+  }, []);
+
   const todayKey = getTodayDateKey();
   const periodLabel = getPeriodLabel(periodFilter);
 
@@ -605,21 +707,27 @@ export default function Home() {
       : null;
   const activeInputMode =
     activeInputSpace === "business" ? inputMode : "quick";
-  const hasValidTransactionDate = isValidDateKey(transactionDate);
+  const hasValidSelectedDate = isValidDateKey(selectedDate);
   const quickTransactions = useMemo(
     () =>
       activeInputSpace
-        ? createQuickTransactions(rawText, activeInputSpace, transactionDate)
+        ? createQuickTransactions(rawText, activeInputSpace, selectedDate)
         : [],
-    [activeInputSpace, rawText, transactionDate],
+    [activeInputSpace, rawText, selectedDate],
   );
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
+      const transactionDateKey = normalizeDateKey(transaction.date);
+
+      if (!transactionDateKey) {
+        return false;
+      }
+
       const matchesSpace =
         spaceFilter === "all" || transaction.space === spaceFilter;
       const matchesPeriod = isInPeriod(
-        transaction.date,
+        transactionDateKey,
         periodFilter,
         todayKey,
       );
@@ -644,12 +752,60 @@ export default function Home() {
     );
   }, [filteredTransactions]);
 
-  const sortedTransactions = useMemo(() => {
-    return [...filteredTransactions].sort((a, b) => {
-      const dateComparison = b.date.localeCompare(a.date);
-      return dateComparison !== 0 ? dateComparison : b.id.localeCompare(a.id);
-    });
+  const historyCategoryOptions = useMemo(() => {
+    return [...new Set(filteredTransactions.map((transaction) => transaction.category))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
   }, [filteredTransactions]);
+
+  const sortedTransactions = useMemo(() => {
+    const normalizedSearch = historySearch.trim().toLowerCase();
+
+    return filteredTransactions
+      .filter((transaction) => {
+        const matchesSearch =
+          !normalizedSearch ||
+          [
+            transaction.note,
+            transaction.rawText,
+            transaction.category,
+          ].some((value) => value.toLowerCase().includes(normalizedSearch));
+        const matchesCategory =
+          historyCategoryFilter === "all" ||
+          transaction.category === historyCategoryFilter;
+        const matchesType =
+          historyTypeFilter === "all" || transaction.type === historyTypeFilter;
+
+        return matchesSearch && matchesCategory && matchesType;
+      })
+      .sort((a, b) => {
+        if (historySort === "oldest") {
+          return compareTransactionsByRecency(b, a);
+        }
+
+        if (historySort === "amount-desc") {
+          const amountComparison = b.amount - a.amount;
+          return amountComparison !== 0
+            ? amountComparison
+            : compareTransactionsByRecency(a, b);
+        }
+
+        if (historySort === "amount-asc") {
+          const amountComparison = a.amount - b.amount;
+          return amountComparison !== 0
+            ? amountComparison
+            : compareTransactionsByRecency(a, b);
+        }
+
+        return compareTransactionsByRecency(a, b);
+      });
+  }, [
+    filteredTransactions,
+    historyCategoryFilter,
+    historySearch,
+    historySort,
+    historyTypeFilter,
+  ]);
 
   const chartData = useMemo(() => {
     const totalsByDate = new Map<
@@ -728,6 +884,47 @@ export default function Home() {
     [filteredTransactions],
   );
 
+  const businessSummary = useMemo(() => {
+    return filteredTransactions.reduce(
+      (result, transaction) => {
+        if (transaction.space !== "business") {
+          return result;
+        }
+
+        if (
+          transaction.type === "income" &&
+          transaction.category === "Penjualan"
+        ) {
+          result.sales += transaction.amount;
+        }
+
+        if (
+          transaction.type === "expense" &&
+          transaction.category === "Bahan/Modal"
+        ) {
+          result.material += transaction.amount;
+        }
+
+        if (
+          transaction.type === "expense" &&
+          transaction.category === "Operasional"
+        ) {
+          result.operational += transaction.amount;
+        }
+
+        if (transaction.type === "income") {
+          result.netCash += transaction.amount;
+        } else {
+          result.netCash -= transaction.amount;
+        }
+
+        result.grossProfit = result.sales - result.material;
+        return result;
+      },
+      { grossProfit: 0, material: 0, netCash: 0, operational: 0, sales: 0 },
+    );
+  }, [filteredTransactions]);
+
   const summaryCards = [
     {
       label: "Saldo",
@@ -752,10 +949,30 @@ export default function Home() {
     },
   ];
 
+  function commitTransactions(nextTransactions: Transaction[]) {
+    const normalizedTransactions = nextTransactions.map((transaction) => ({
+      ...transaction,
+      date: normalizeDateKey(transaction.date) ?? getTodayDateKey(),
+    }));
+
+    setTransactions(normalizedTransactions);
+    writeTransactions(normalizedTransactions);
+    console.log("transactions setelah update", normalizedTransactions);
+
+    return normalizedTransactions;
+  }
+
+  function showSubmittedDateIfFilteredOut(date: string) {
+    if (!isInPeriod(date, periodFilter, todayKey)) {
+      setPeriodFilter("all");
+    }
+  }
+
   function addTransaction(inputText = rawText) {
     const trimmedText = inputText.trim();
 
     if (!trimmedText) {
+      setQuickFeedback("");
       return;
     }
 
@@ -763,17 +980,36 @@ export default function Home() {
       return;
     }
 
-    const nextTransactions = createQuickTransactions(
-      trimmedText,
-      activeInputSpace,
-      transactionDate,
-    );
-
-    if (nextTransactions.length <= 0) {
+    if (!hasValidSelectedDate) {
+      setQuickFeedback("");
       return;
     }
 
-    writeTransactions([...nextTransactions, ...transactions]);
+    const nextTransactions = createQuickTransactions(
+      trimmedText,
+      activeInputSpace,
+      selectedDate,
+    );
+
+    if (nextTransactions.length <= 0) {
+      setQuickFeedback("");
+      return;
+    }
+
+    const updatedTransactions = [...nextTransactions, ...transactions];
+    console.log("newTransactions", nextTransactions);
+    const committedTransactions = commitTransactions(updatedTransactions);
+
+    if (
+      !nextTransactions.every((transaction) =>
+        committedTransactions.some((current) => current.id === transaction.id),
+      )
+    ) {
+      setQuickFeedback("");
+      return;
+    }
+
+    showSubmittedDateIfFilteredOut(selectedDate);
     setQuickFeedback(
       `${nextTransactions.length} transaksi berhasil dicatat`,
     );
@@ -791,15 +1027,27 @@ export default function Home() {
   }
 
   function addBusinessTransaction() {
-    if (activeInputSpace !== "business" || !canSubmitBusiness) {
+    if (
+      activeInputSpace !== "business" ||
+      !canSubmitBusiness ||
+      !hasValidSelectedDate
+    ) {
       return;
     }
 
     const transaction = createBusinessTransaction(
       businessForm,
-      transactionDate,
+      selectedDate,
     );
-    writeTransactions([transaction, ...transactions]);
+    const updatedTransactions = [transaction, ...transactions];
+    console.log("newTransactions", [transaction]);
+    const committedTransactions = commitTransactions(updatedTransactions);
+
+    if (!committedTransactions.some((current) => current.id === transaction.id)) {
+      return;
+    }
+
+    showSubmittedDateIfFilteredOut(selectedDate);
     setBusinessForm((current) => ({
       ...initialBusinessForm,
       kind: current.kind,
@@ -808,7 +1056,7 @@ export default function Home() {
   }
 
   function deleteTransaction(id: string) {
-    writeTransactions(
+    commitTransactions(
       transactions.filter((transaction) => transaction.id !== id),
     );
   }
@@ -829,18 +1077,22 @@ export default function Home() {
 
           <nav className="mt-10 space-y-1">
             {navItems.map((item) => (
-              <a
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-                  item.active
+              <button
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                  activePage === item.page
                     ? "bg-white text-zinc-950"
                     : "text-zinc-400 hover:bg-white/5 hover:text-white"
                 }`}
-                href="#"
                 key={item.label}
+                onClick={() => {
+                  setActivePage(item.page);
+                  setIsMobileNavOpen(false);
+                }}
+                type="button"
               >
                 <item.icon size={18} />
                 {item.label}
-              </a>
+              </button>
             ))}
           </nav>
 
@@ -862,6 +1114,7 @@ export default function Home() {
                 <button
                   aria-label="Buka menu"
                   className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-zinc-300 lg:hidden"
+                  onClick={() => setIsMobileNavOpen((current) => !current)}
                   type="button"
                 >
                   <Menu size={20} />
@@ -871,7 +1124,9 @@ export default function Home() {
                     CatatKeu
                   </p>
                   <h2 className="text-xl font-semibold text-white sm:text-2xl">
-                    Ringkasan Uang Harian
+                    {activePage === "dashboard"
+                      ? "Ringkasan Uang Harian"
+                      : "Analitik Keuangan"}
                   </h2>
                 </div>
               </div>
@@ -893,47 +1148,82 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            {isMobileNavOpen ? (
+              <nav className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
+                {navItems.map((item) => (
+                  <button
+                    className={`flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-medium transition ${
+                      activePage === item.page
+                        ? "bg-white text-zinc-950"
+                        : "border border-white/10 text-zinc-300 hover:bg-white/5"
+                    }`}
+                    key={item.label}
+                    onClick={() => {
+                      setActivePage(item.page);
+                      setIsMobileNavOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <item.icon size={16} />
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            ) : null}
           </header>
 
           <div className="grid gap-4 px-4 py-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-12 lg:gap-5 lg:px-8">
             <section className="grid gap-4 sm:col-span-2 sm:grid-cols-3 lg:col-span-12">
-              <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
-                {spaceFilterOptions.map((option) => (
-                  <button
-                    className={`h-9 rounded-lg px-3 text-sm font-medium transition ${
-                      spaceFilter === option.value
-                        ? "bg-white text-zinc-950"
-                        : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                    key={option.value}
-                    onClick={() => {
-                      setSpaceFilter(option.value);
-                      setQuickFeedback("");
+              <div className="grid gap-3 sm:col-span-3 lg:grid-cols-2">
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+                    Ruang catatan
+                  </p>
+                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                    {spaceFilterOptions.map((option) => (
+                      <button
+                        className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                          spaceFilter === option.value
+                            ? "bg-white text-zinc-950"
+                            : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+                        }`}
+                        key={option.value}
+                        onClick={() => {
+                          setSpaceFilter(option.value);
+                          setQuickFeedback("");
 
-                      if (option.value !== "business") {
-                        setInputMode("quick");
-                      }
-                    }}
-                    type="button"
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                <div className="mx-1 hidden h-6 w-px bg-white/10 sm:block" />
-                {periodFilterOptions.map((option) => (
-                  <button
-                    className={`h-9 rounded-lg px-3 text-sm font-medium transition ${
-                      periodFilter === option.value
-                        ? "bg-cyan-300 text-zinc-950"
-                        : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                    key={option.value}
-                    onClick={() => setPeriodFilter(option.value)}
-                    type="button"
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                          if (option.value !== "business") {
+                            setInputMode("quick");
+                          }
+                        }}
+                        type="button"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+                    Periode
+                  </p>
+                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                    {periodFilterOptions.map((option) => (
+                      <button
+                        className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                          periodFilter === option.value
+                            ? "bg-cyan-300 text-zinc-950"
+                            : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+                        }`}
+                        key={option.value}
+                        onClick={() => setPeriodFilter(option.value)}
+                        type="button"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               {summaryCards.map((card) => (
                 <article
@@ -958,7 +1248,8 @@ export default function Home() {
               ))}
             </section>
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-7">
+            {activePage === "dashboard" ? (
+              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-7">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm text-zinc-400">Input transaksi</p>
@@ -1033,10 +1324,10 @@ export default function Home() {
                         className="h-9 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-36"
                         id="quick-date"
                         onChange={(event) =>
-                          setTransactionDate(event.target.value)
+                          setSelectedDate(event.target.value)
                         }
                         type="date"
-                        value={transactionDate}
+                        value={selectedDate}
                       />
                     </label>
                   </div>
@@ -1057,7 +1348,7 @@ export default function Home() {
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={
-                        !hasValidTransactionDate ||
+                        !hasValidSelectedDate ||
                         !rawText.trim() ||
                         quickTransactions.length <= 0
                       }
@@ -1107,10 +1398,10 @@ export default function Home() {
                           className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-40"
                           id="business-date"
                           onChange={(event) =>
-                            setTransactionDate(event.target.value)
+                            setSelectedDate(event.target.value)
                           }
                           type="date"
-                          value={transactionDate}
+                          value={selectedDate}
                         />
                       </div>
                     </div>
@@ -1299,7 +1590,7 @@ export default function Home() {
                     </p>
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!hasValidTransactionDate || !canSubmitBusiness}
+                      disabled={!hasValidSelectedDate || !canSubmitBusiness}
                       onClick={addBusinessTransaction}
                       type="button"
                     >
@@ -1309,9 +1600,12 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </section>
+              </section>
+            ) : null}
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-5">
+            {activePage === "analytics" ? (
+              <>
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-8">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Grafik</p>
@@ -1337,7 +1631,7 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
               <p className="text-sm text-zinc-400">Ringkasan periode</p>
               <h3 className="mt-1 text-lg font-semibold text-white">
                 {periodLabel}
@@ -1374,9 +1668,9 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-            </section>
+                </section>
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
               <p className="text-sm text-zinc-400">Kategori pengeluaran</p>
               <h3 className="mt-1 text-lg font-semibold text-white">Top 3</h3>
               <div className="mt-5 space-y-3">
@@ -1402,9 +1696,65 @@ export default function Home() {
                   </div>
                 )}
               </div>
-            </section>
+                </section>
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-8">
+                  <p className="text-sm text-zinc-400">Khusus Usaha</p>
+                  <h3 className="mt-1 text-lg font-semibold text-white">
+                    Ringkasan usaha
+                  </h3>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {[
+                      {
+                        label: "Penjualan",
+                        tone: "text-emerald-300",
+                        value: businessSummary.sales,
+                      },
+                      {
+                        label: "Bahan/Modal",
+                        tone: "text-rose-300",
+                        value: businessSummary.material,
+                      },
+                      {
+                        label: "Operasional",
+                        tone: "text-rose-300",
+                        value: businessSummary.operational,
+                      },
+                      {
+                        label: "Laba kotor sederhana",
+                        tone:
+                          businessSummary.grossProfit >= 0
+                            ? "text-cyan-300"
+                            : "text-rose-300",
+                        value: businessSummary.grossProfit,
+                      },
+                      {
+                        label: "Arus kas bersih",
+                        tone:
+                          businessSummary.netCash >= 0
+                            ? "text-cyan-300"
+                            : "text-rose-300",
+                        value: businessSummary.netCash,
+                      },
+                    ].map((item) => (
+                      <div
+                        className="rounded-lg bg-[#080b10] px-3 py-4"
+                        key={item.label}
+                      >
+                        <p className="text-sm text-zinc-400">{item.label}</p>
+                        <p className={`mt-2 text-base font-semibold ${item.tone}`}>
+                          {formatCurrency(item.value)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-sm text-zinc-500">
+                    Dihitung dari transaksi Usaha yang cocok dengan filter ruang
+                    dan periode aktif.
+                  </p>
+                </section>
+
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
               <p className="text-sm text-zinc-400">Statistik</p>
               <h3 className="mt-1 text-lg font-semibold text-white">
                 Transaksi
@@ -1429,9 +1779,12 @@ export default function Home() {
               <p className="mt-4 text-sm text-zinc-500">
                 Mengikuti filter ruang dan periode yang sedang aktif.
               </p>
-            </section>
+                </section>
+              </>
+            ) : null}
 
-            <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-12">
+            {activePage === "dashboard" ? (
+              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-12">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Riwayat</p>
@@ -1450,6 +1803,84 @@ export default function Home() {
                   <Plus size={16} />
                   Coba contoh
                 </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+                <label className="block">
+                  <span className="text-xs font-medium text-zinc-500">
+                    Search transaksi
+                  </span>
+                  <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#0d1118] px-3 text-zinc-400">
+                    <Search size={16} />
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                      onChange={(event) => setHistorySearch(event.target.value)}
+                      placeholder="Cari catatan"
+                      type="search"
+                      value={historySearch}
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-zinc-500">
+                    Kategori
+                  </span>
+                  <select
+                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                    onChange={(event) =>
+                      setHistoryCategoryFilter(event.target.value)
+                    }
+                    value={historyCategoryFilter}
+                  >
+                    <option value="all">Semua kategori</option>
+                    {historyCategoryOptions.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-zinc-500">
+                    Tipe
+                  </span>
+                  <select
+                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                    onChange={(event) =>
+                      setHistoryTypeFilter(
+                        event.target.value as HistoryTypeFilter,
+                      )
+                    }
+                    value={historyTypeFilter}
+                  >
+                    {historyTypeFilterOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-zinc-500">
+                    Sort
+                  </span>
+                  <select
+                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                    onChange={(event) =>
+                      setHistorySort(event.target.value as HistorySort)
+                    }
+                    value={historySort}
+                  >
+                    {historySortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               <div className="mt-5 min-h-52 rounded-lg border border-dashed border-white/10 bg-[#080b10]">
@@ -1516,14 +1947,16 @@ export default function Home() {
                     <div>
                       <CreditCard className="mx-auto text-zinc-600" size={34} />
                       <p className="mt-3 text-sm text-zinc-500">
-                        Belum ada catatan. Tulis pemasukan, belanja pribadi,
-                        atau transaksi usaha mikro pertama.
+                        {filteredTransactions.length > 0
+                          ? "Tidak ada transaksi yang cocok dengan filter riwayat."
+                          : "Belum ada catatan. Tulis pemasukan, belanja pribadi, atau transaksi usaha mikro pertama."}
                       </p>
                     </div>
                   </div>
                 )}
               </div>
-            </section>
+              </section>
+            ) : null}
           </div>
         </section>
       </div>
