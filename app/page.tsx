@@ -39,6 +39,7 @@ export type Transaction = {
   amount: number;
   note: string;
   rawText: string;
+  paymentMethod?: PaymentMethod | null;
 };
 
 const STORAGE_KEY = "catatkeu.transactions";
@@ -65,6 +66,19 @@ type EditTransactionForm = {
 type BusinessTransactionKind = "sale" | "material";
 type PaymentMethod = "cash" | "qris" | "transfer";
 type MaterialUnit = "pcs" | "kg" | "gram" | "liter" | "pack" | "lainnya";
+type TransactionRow = {
+  id: string | number;
+  user_id: string;
+  date: string;
+  type: Transaction["type"];
+  category: string;
+  amount: number;
+  note: string;
+  raw_text: string | null;
+  space: TransactionSpace;
+  payment_method: PaymentMethod | null;
+  created_at?: string;
+};
 
 type BusinessForm = {
   kind: BusinessTransactionKind;
@@ -886,6 +900,7 @@ function createBusinessTransaction(
       amount: total,
       note: transactionNote,
       rawText,
+      paymentMethod: form.paymentMethod,
     };
   }
 
@@ -909,6 +924,7 @@ function createBusinessTransaction(
     amount: total,
     note: transactionNote,
     rawText,
+    paymentMethod: form.paymentMethod,
   };
 }
 
@@ -940,6 +956,12 @@ function normalizeTransaction(value: unknown): Transaction | null {
     typeof transaction.date === "string"
       ? normalizeDateKey(transaction.date) ?? getTodayDateKey()
       : getTodayDateKey();
+  const paymentMethod =
+    transaction.paymentMethod === "cash" ||
+    transaction.paymentMethod === "qris" ||
+    transaction.paymentMethod === "transfer"
+      ? transaction.paymentMethod
+      : null;
 
   return {
     id,
@@ -950,6 +972,35 @@ function normalizeTransaction(value: unknown): Transaction | null {
     amount,
     note,
     rawText,
+    paymentMethod,
+  };
+}
+
+function normalizeTransactionRow(row: TransactionRow): Transaction | null {
+  return normalizeTransaction({
+    id: String(row.id),
+    date: row.date,
+    type: row.type,
+    space: row.space,
+    category: row.category,
+    amount: row.amount,
+    note: row.note,
+    rawText: row.raw_text ?? "",
+    paymentMethod: row.payment_method,
+  });
+}
+
+function toTransactionPayload(transaction: Transaction, userId: string) {
+  return {
+    user_id: userId,
+    date: normalizeDateKey(transaction.date) ?? getTodayDateKey(),
+    type: transaction.type,
+    category: transaction.category,
+    amount: transaction.amount,
+    note: transaction.note,
+    raw_text: transaction.rawText,
+    space: transaction.space,
+    payment_method: transaction.paymentMethod ?? null,
   };
 }
 
@@ -993,20 +1044,6 @@ function getTransactionsSnapshot() {
   return parseTransactions(stored);
 }
 
-function subscribeTransactions(listener: () => void) {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  window.addEventListener("storage", listener);
-  window.addEventListener(STORAGE_EVENT, listener);
-
-  return () => {
-    window.removeEventListener("storage", listener);
-    window.removeEventListener(STORAGE_EVENT, listener);
-  };
-}
-
 function writeTransactions(transactions: Transaction[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
   cachedStorageValue = JSON.stringify(transactions);
@@ -1014,11 +1051,27 @@ function writeTransactions(transactions: Transaction[]) {
   window.dispatchEvent(new Event(STORAGE_EVENT));
 }
 
+async function getAuthenticatedUserId() {
+  if (!supabase) {
+    throw new Error("Supabase belum dikonfigurasi.");
+  }
+
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    throw new Error(error?.message || "Sesi login tidak ditemukan.");
+  }
+
+  return data.user.id;
+}
+
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [transactions, setTransactions] =
-    useState<Transaction[]>(dummyTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
+  const [isSavingTransaction, setIsSavingTransaction] = useState(false);
+  const [transactionError, setTransactionError] = useState("");
   const [rawText, setRawText] = useState("");
   const [quickFeedback, setQuickFeedback] = useState("");
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
@@ -1048,7 +1101,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase) {
-      setIsAuthLoading(false);
+      queueMicrotask(() => {
+        setIsAuthLoading(false);
+      });
       return;
     }
 
@@ -1081,14 +1136,76 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const syncTransactions = () => {
-      const parsedTransactions = getTransactionsSnapshot();
-      setTransactions(parsedTransactions);
-    };
+    if (!session) {
+      queueMicrotask(() => {
+        setTransactions([]);
+        setIsTransactionsLoading(false);
+      });
+      return;
+    }
 
-    syncTransactions();
-    return subscribeTransactions(syncTransactions);
-  }, []);
+    let isMounted = true;
+
+    async function loadTransactions() {
+      setIsTransactionsLoading(true);
+      setTransactionError("");
+
+      if (!supabase) {
+        if (isMounted) {
+          setTransactions(getTransactionsSnapshot());
+          setTransactionError(
+            "Supabase belum dikonfigurasi. Menampilkan data lokal sementara.",
+          );
+          setIsTransactionsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const userId = await getAuthenticatedUserId();
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("date", { ascending: false })
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        const loadedTransactions = ((data ?? []) as TransactionRow[])
+          .map(normalizeTransactionRow)
+          .filter((transaction): transaction is Transaction =>
+            Boolean(transaction),
+          );
+
+        if (isMounted) {
+          setTransactions(loadedTransactions);
+          writeTransactions(loadedTransactions);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setTransactions(getTransactionsSnapshot());
+          setTransactionError(
+            `Gagal memuat transaksi dari Supabase. Menampilkan data lokal sementara. ${
+              error instanceof Error ? error.message : ""
+            }`.trim(),
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsTransactionsLoading(false);
+        }
+      }
+    }
+
+    loadTransactions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session]);
 
   const todayKey = getTodayDateKey();
   const periodLabel = getPeriodLabel(periodFilter);
@@ -1542,13 +1659,83 @@ export default function Home() {
     return normalizedTransactions;
   }
 
+  async function insertTransactionsToSupabase(nextTransactions: Transaction[]) {
+    if (!supabase) {
+      throw new Error("Supabase belum dikonfigurasi.");
+    }
+
+    const userId = await getAuthenticatedUserId();
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert(
+        nextTransactions.map((transaction) =>
+          toTransactionPayload(transaction, userId),
+        ),
+      )
+      .select("*");
+
+    if (error) {
+      throw error;
+    }
+
+    return ((data ?? []) as TransactionRow[])
+      .map(normalizeTransactionRow)
+      .filter((transaction): transaction is Transaction =>
+        Boolean(transaction),
+      );
+  }
+
+  async function updateTransactionInSupabase(transaction: Transaction) {
+    if (!supabase) {
+      throw new Error("Supabase belum dikonfigurasi.");
+    }
+
+    const userId = await getAuthenticatedUserId();
+    const { data, error } = await supabase
+      .from("transactions")
+      .update(toTransactionPayload(transaction, userId))
+      .eq("id", transaction.id)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const updatedTransaction = normalizeTransactionRow(data as TransactionRow);
+
+    if (!updatedTransaction) {
+      throw new Error("Data transaksi dari Supabase tidak valid.");
+    }
+
+    return updatedTransaction;
+  }
+
+  async function deleteTransactionFromSupabase(id: string) {
+    if (!supabase) {
+      throw new Error("Supabase belum dikonfigurasi.");
+    }
+
+    const userId = await getAuthenticatedUserId();
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
   function showSubmittedDateIfFilteredOut(date: string) {
     if (!isInPeriod(date, periodFilter, todayKey, historyCustomDate)) {
       setPeriodFilter("all");
     }
   }
 
-  function addTransaction(inputText = rawText) {
+  async function addTransaction(inputText = rawText) {
     const trimmedText = inputText.trim();
 
     if (!trimmedText) {
@@ -1578,15 +1765,36 @@ export default function Home() {
 
     const updatedTransactions = [...nextTransactions, ...transactions];
     console.log("newTransactions", nextTransactions);
-    const committedTransactions = commitTransactions(updatedTransactions);
+    setIsSavingTransaction(true);
+    setTransactionError("");
 
-    if (
-      !nextTransactions.every((transaction) =>
-        committedTransactions.some((current) => current.id === transaction.id),
-      )
-    ) {
-      setQuickFeedback("");
-      return;
+    try {
+      const savedTransactions = await insertTransactionsToSupabase(
+        nextTransactions,
+      );
+      const committedTransactions = commitTransactions([
+        ...(savedTransactions.length > 0 ? savedTransactions : nextTransactions),
+        ...transactions,
+      ]);
+
+      if (
+        !committedTransactions.some((current) =>
+          (savedTransactions.length > 0 ? savedTransactions : nextTransactions)
+            .some((transaction) => transaction.id === current.id),
+        )
+      ) {
+        setQuickFeedback("");
+        return;
+      }
+    } catch (error) {
+      commitTransactions(updatedTransactions);
+      setTransactionError(
+        `Gagal simpan ke Supabase. Transaksi disimpan lokal sementara. ${
+          error instanceof Error ? error.message : ""
+        }`.trim(),
+      );
+    } finally {
+      setIsSavingTransaction(false);
     }
 
     showSubmittedDateIfFilteredOut(selectedDate);
@@ -1606,7 +1814,7 @@ export default function Home() {
     }));
   }
 
-  function addBusinessTransaction() {
+  async function addBusinessTransaction() {
     if (
       activeInputSpace !== "business" ||
       !canSubmitBusiness ||
@@ -1621,10 +1829,31 @@ export default function Home() {
     );
     const updatedTransactions = [transaction, ...transactions];
     console.log("newTransactions", [transaction]);
-    const committedTransactions = commitTransactions(updatedTransactions);
+    setIsSavingTransaction(true);
+    setTransactionError("");
 
-    if (!committedTransactions.some((current) => current.id === transaction.id)) {
-      return;
+    try {
+      const savedTransactions = await insertTransactionsToSupabase([
+        transaction,
+      ]);
+      const savedTransaction = savedTransactions[0] ?? transaction;
+      const committedTransactions = commitTransactions([
+        savedTransaction,
+        ...transactions,
+      ]);
+
+      if (!committedTransactions.some((current) => current.id === savedTransaction.id)) {
+        return;
+      }
+    } catch (error) {
+      commitTransactions(updatedTransactions);
+      setTransactionError(
+        `Gagal simpan ke Supabase. Transaksi disimpan lokal sementara. ${
+          error instanceof Error ? error.message : ""
+        }`.trim(),
+      );
+    } finally {
+      setIsSavingTransaction(false);
     }
 
     showSubmittedDateIfFilteredOut(selectedDate);
@@ -1635,10 +1864,27 @@ export default function Home() {
     }));
   }
 
-  function deleteTransaction(id: string) {
-    commitTransactions(
-      transactions.filter((transaction) => transaction.id !== id),
+  async function deleteTransaction(id: string) {
+    const updatedTransactions = transactions.filter(
+      (transaction) => transaction.id !== id,
     );
+
+    setIsSavingTransaction(true);
+    setTransactionError("");
+
+    try {
+      await deleteTransactionFromSupabase(id);
+      commitTransactions(updatedTransactions);
+    } catch (error) {
+      commitTransactions(updatedTransactions);
+      setTransactionError(
+        `Gagal hapus di Supabase. Perubahan disimpan lokal sementara. ${
+          error instanceof Error ? error.message : ""
+        }`.trim(),
+      );
+    } finally {
+      setIsSavingTransaction(false);
+    }
 
     if (editingTransactionId === id) {
       setEditingTransactionId(null);
@@ -1670,7 +1916,7 @@ export default function Home() {
     setEditingTransactionId(null);
   }
 
-  function saveEditTransaction(id: string) {
+  async function saveEditTransaction(id: string) {
     const amount = Math.round(Number(editForm.amount));
     const date = normalizeDateKey(editForm.date);
     const category = editForm.category.trim();
@@ -1680,21 +1926,50 @@ export default function Home() {
       return;
     }
 
-    commitTransactions(
-      transactions.map((transaction) =>
-        transaction.id === id
-          ? {
-              ...transaction,
-              amount,
-              category,
-              date,
-              note,
-              rawText: transaction.rawText || note,
-              space: editForm.space,
-            }
-          : transaction,
-      ),
+    const updatedTransaction = transactions.find(
+      (transaction) => transaction.id === id,
     );
+
+    if (!updatedTransaction) {
+      return;
+    }
+
+    const nextTransaction = {
+      ...updatedTransaction,
+      amount,
+      category,
+      date,
+      note,
+      rawText: updatedTransaction.rawText || note,
+      space: editForm.space,
+    };
+    const updatedTransactions = transactions.map((transaction) =>
+      transaction.id === id ? nextTransaction : transaction,
+    );
+
+    setIsSavingTransaction(true);
+    setTransactionError("");
+
+    try {
+      const savedTransaction = await updateTransactionInSupabase(
+        nextTransaction,
+      );
+      commitTransactions(
+        transactions.map((transaction) =>
+          transaction.id === id ? savedTransaction : transaction,
+        ),
+      );
+    } catch (error) {
+      commitTransactions(updatedTransactions);
+      setTransactionError(
+        `Gagal simpan perubahan ke Supabase. Perubahan disimpan lokal sementara. ${
+          error instanceof Error ? error.message : ""
+        }`.trim(),
+      );
+    } finally {
+      setIsSavingTransaction(false);
+    }
+
     setEditingTransactionId(null);
   }
 
@@ -1831,6 +2106,20 @@ export default function Home() {
               </nav>
             ) : null}
           </header>
+
+          {isTransactionsLoading || transactionError ? (
+            <div className="px-4 pt-4 sm:px-6 lg:px-8 2xl:px-10">
+              <div
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  transactionError
+                    ? "border-rose-300/20 bg-rose-400/10 text-rose-100"
+                    : "border-cyan-300/20 bg-cyan-400/10 text-cyan-100"
+                }`}
+              >
+                {transactionError || "Memuat transaksi..."}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid w-full gap-5 px-4 py-5 sm:grid-cols-2 sm:px-6 sm:py-6 lg:grid-cols-12 lg:gap-6 lg:px-8 lg:py-8 2xl:gap-7 2xl:px-10">
             <section className="grid gap-4 sm:col-span-2 sm:grid-cols-2 lg:col-span-12 xl:grid-cols-3">
@@ -2020,6 +2309,8 @@ export default function Home() {
                     <button
                       className="inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                       disabled={
+                        isSavingTransaction ||
+                        isTransactionsLoading ||
                         !hasValidSelectedDate ||
                         !rawText.trim() ||
                         quickTransactions.length <= 0
@@ -2262,7 +2553,12 @@ export default function Home() {
                     </p>
                     <button
                       className="inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                      disabled={!hasValidSelectedDate || !canSubmitBusiness}
+                      disabled={
+                        isSavingTransaction ||
+                        isTransactionsLoading ||
+                        !hasValidSelectedDate ||
+                        !canSubmitBusiness
+                      }
                       onClick={addBusinessTransaction}
                       type="button"
                     >
@@ -2411,7 +2707,13 @@ export default function Home() {
                 </div>
 
                 <div className="mt-5 min-h-72 space-y-3">
-                  {sortedTransactions.length > 0 ? (
+                  {isTransactionsLoading ? (
+                    <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-white/10 bg-[#080b10] px-6 text-center">
+                      <p className="text-sm font-medium text-zinc-300">
+                        Memuat transaksi...
+                      </p>
+                    </div>
+                  ) : sortedTransactions.length > 0 ? (
                     sortedTransactions.map((transaction) => {
                       const isEditing = editingTransactionId === transaction.id;
 
@@ -2503,7 +2805,8 @@ export default function Home() {
                               </label>
                               <div className="flex flex-col gap-2 md:col-span-2 md:flex-row 2xl:col-span-5">
                                 <button
-                                  className="inline-flex h-11 items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100"
+                                  className="inline-flex h-11 items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={isSavingTransaction}
                                   onClick={() =>
                                     saveEditTransaction(transaction.id)
                                   }
@@ -2576,7 +2879,8 @@ export default function Home() {
                                 </p>
                                 <button
                                   aria-label={`Edit transaksi ${transaction.note}`}
-                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-cyan-200 sm:size-10"
+                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50 sm:size-10"
+                                  disabled={isSavingTransaction}
                                   onClick={() =>
                                     startEditTransaction(transaction)
                                   }
@@ -2586,7 +2890,8 @@ export default function Home() {
                                 </button>
                                 <button
                                   aria-label={`Hapus transaksi ${transaction.note}`}
-                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200 sm:size-10"
+                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50 sm:size-10"
+                                  disabled={isSavingTransaction}
                                   onClick={() =>
                                     deleteTransaction(transaction.id)
                                   }
