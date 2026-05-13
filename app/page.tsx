@@ -1259,6 +1259,7 @@ export default function Home() {
   const [rawText, setRawText] = useState("");
   const [quickFeedback, setQuickFeedback] = useState("");
   const quickInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today");
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
@@ -1269,6 +1270,9 @@ export default function Home() {
     useState<HistoryTypeFilter>("all");
   const [historySort, setHistorySort] = useState<HistorySort>("newest");
   const [historyCustomDate, setHistoryCustomDate] = useState(getTodayDateKey);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<
+    Set<string>
+  >(new Set());
   const [editingTransactionId, setEditingTransactionId] = useState<
     string | null
   >(null);
@@ -1513,6 +1517,30 @@ export default function Home() {
     historySort,
     historyTypeFilter,
   ]);
+
+  const visibleTransactionIds = useMemo(
+    () => sortedTransactions.map((transaction) => transaction.id),
+    [sortedTransactions],
+  );
+  const selectedVisibleTransactionIds = useMemo(
+    () =>
+      visibleTransactionIds.filter((id) => selectedTransactionIds.has(id)),
+    [selectedTransactionIds, visibleTransactionIds],
+  );
+  const selectedVisibleTransactionCount = selectedVisibleTransactionIds.length;
+  const hasVisibleTransactions = visibleTransactionIds.length > 0;
+  const areAllVisibleTransactionsSelected =
+    hasVisibleTransactions &&
+    selectedVisibleTransactionCount === visibleTransactionIds.length;
+  const isVisibleSelectionIndeterminate =
+    selectedVisibleTransactionCount > 0 && !areAllVisibleTransactionsSelected;
+
+  useEffect(() => {
+    if (selectAllTransactionsRef.current) {
+      selectAllTransactionsRef.current.indeterminate =
+        isVisibleSelectionIndeterminate;
+    }
+  }, [isVisibleSelectionIndeterminate]);
 
   const chartData = useMemo(() => {
     const totalsByDate = new Map<
@@ -1919,6 +1947,23 @@ export default function Home() {
     }
   }
 
+  async function deleteTransactionsFromSupabase(ids: string[]) {
+    if (!supabase) {
+      throw new Error("Supabase belum dikonfigurasi.");
+    }
+
+    const userId = await getAuthenticatedUserId();
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .in("id", ids)
+      .eq("user_id", userId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
   function showSubmittedDateIfFilteredOut(date: string) {
     if (!isInPeriod(date, periodFilter, todayKey, historyCustomDate)) {
       setPeriodFilter("all");
@@ -2096,6 +2141,77 @@ export default function Home() {
     }
 
     if (editingTransactionId === id) {
+      setEditingTransactionId(null);
+    }
+
+    setSelectedTransactionIds((current) => {
+      if (!current.has(id)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleTransactionSelection(id: string, isSelected: boolean) {
+    setSelectedTransactionIds((current) => {
+      const next = new Set(current);
+
+      if (isSelected) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleAllVisibleTransactions(isSelected: boolean) {
+    setSelectedTransactionIds(() =>
+      isSelected ? new Set(visibleTransactionIds) : new Set(),
+    );
+  }
+
+  async function deleteSelectedTransactions() {
+    if (selectedVisibleTransactionIds.length === 0 || isSavingTransaction) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Yakin hapus ${selectedVisibleTransactionIds.length} transaksi terpilih?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const idsToDelete = [...selectedVisibleTransactionIds];
+    const idsToDeleteSet = new Set(idsToDelete);
+    const updatedTransactions = transactions.filter(
+      (transaction) => !idsToDeleteSet.has(transaction.id),
+    );
+
+    setIsSavingTransaction(true);
+    setTransactionError("");
+
+    try {
+      await deleteTransactionsFromSupabase(idsToDelete);
+      commitTransactions(updatedTransactions);
+      setSelectedTransactionIds(new Set());
+    } catch (error) {
+      setTransactionError(
+        `Gagal hapus transaksi terpilih di Supabase. ${
+          error instanceof Error ? error.message : ""
+        }`.trim(),
+      );
+    } finally {
+      setIsSavingTransaction(false);
+    }
+
+    if (editingTransactionId && idsToDeleteSet.has(editingTransactionId)) {
       setEditingTransactionId(null);
     }
   }
@@ -2933,6 +3049,44 @@ export default function Home() {
                   </div>
                 </div>
 
+                <div className="mt-3 flex flex-col gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-w-0 items-center gap-3 text-sm font-medium text-zinc-300">
+                    <input
+                      aria-label="Pilih semua transaksi yang sedang tampil"
+                      checked={areAllVisibleTransactionsSelected}
+                      className="size-5 shrink-0 rounded border-white/20 bg-[#0d1118] accent-cyan-200"
+                      disabled={
+                        isSavingTransaction ||
+                        isTransactionsLoading ||
+                        !hasVisibleTransactions
+                      }
+                      onChange={(event) =>
+                        toggleAllVisibleTransactions(event.target.checked)
+                      }
+                      ref={selectAllTransactionsRef}
+                      type="checkbox"
+                    />
+                    <span className="min-w-0">
+                      Pilih Semua
+                      <span className="ml-2 text-xs font-normal text-zinc-500">
+                        {selectedVisibleTransactionCount} dipilih
+                      </span>
+                    </span>
+                  </label>
+                  <button
+                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-rose-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                    disabled={
+                      isSavingTransaction ||
+                      selectedVisibleTransactionCount === 0
+                    }
+                    onClick={deleteSelectedTransactions}
+                    type="button"
+                  >
+                    <Trash2 size={16} />
+                    Hapus Terpilih
+                  </button>
+                </div>
+
                 <div className="mt-5 min-h-72 space-y-3">
                   {isTransactionsLoading ? (
                     <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-white/10 bg-[#080b10] px-6 text-center">
@@ -2943,12 +3097,37 @@ export default function Home() {
                   ) : sortedTransactions.length > 0 ? (
                     sortedTransactions.map((transaction) => {
                       const isEditing = editingTransactionId === transaction.id;
+                      const isSelected = selectedTransactionIds.has(
+                        transaction.id,
+                      );
 
                       return (
                         <article
-                          className="rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-lg shadow-black/10 transition hover:border-cyan-200/20 hover:bg-[#0b111a] sm:p-5"
+                          className={`rounded-lg border bg-[#080b10] p-4 shadow-lg shadow-black/10 transition hover:border-cyan-200/20 hover:bg-[#0b111a] sm:p-5 ${
+                            isSelected
+                              ? "border-cyan-200/50"
+                              : "border-white/10"
+                          }`}
                           key={transaction.id}
                         >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                            <label className="flex w-fit shrink-0 items-center gap-3 text-sm text-zinc-400 sm:pt-2">
+                              <input
+                                aria-label={`Pilih transaksi ${transaction.note}`}
+                                checked={isSelected}
+                                className="size-5 rounded border-white/20 bg-[#0d1118] accent-cyan-200"
+                                disabled={isSavingTransaction}
+                                onChange={(event) =>
+                                  toggleTransactionSelection(
+                                    transaction.id,
+                                    event.target.checked,
+                                  )
+                                }
+                                type="checkbox"
+                              />
+                              <span className="sm:hidden">Pilih</span>
+                            </label>
+                            <div className="min-w-0 flex-1">
                           {isEditing ? (
                             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
                               <label className="block">
@@ -3129,6 +3308,8 @@ export default function Home() {
                               </div>
                             </div>
                           )}
+                            </div>
+                          </div>
                         </article>
                       );
                     })
