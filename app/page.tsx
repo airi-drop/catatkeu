@@ -11,10 +11,12 @@ import {
   HomeIcon,
   LineChart,
   Menu,
+  Package,
   Plus,
   Search,
   Send,
   Settings,
+  ShoppingCart,
   Sparkles,
   Trash2,
   Wallet,
@@ -33,8 +35,35 @@ export type Transaction = {
 const STORAGE_KEY = "catatkeu.transactions";
 const STORAGE_EVENT = "catatkeu.transactions.updated";
 
+type InputMode = "quick" | "business";
+type BusinessTransactionKind = "sale" | "material";
+type PaymentMethod = "cash" | "qris" | "transfer";
+type MaterialUnit = "pcs" | "kg" | "gram" | "liter" | "pack" | "lainnya";
+
+type BusinessForm = {
+  kind: BusinessTransactionKind;
+  itemName: string;
+  quantity: string;
+  unit: MaterialUnit;
+  unitPrice: string;
+  paymentMethod: PaymentMethod;
+  supplier: string;
+  note: string;
+};
+
 let cachedStorageValue: string | null = null;
 let cachedTransactions: Transaction[] = [];
+
+const initialBusinessForm: BusinessForm = {
+  kind: "sale",
+  itemName: "",
+  quantity: "1",
+  unit: "pcs",
+  unitPrice: "",
+  paymentMethod: "cash",
+  supplier: "",
+  note: "",
+};
 
 const dummyTransactions: Transaction[] = [
   {
@@ -261,6 +290,66 @@ function createTransaction(rawText: string): Transaction {
   };
 }
 
+function parsePositiveNumber(value: string) {
+  const normalized = value.replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function createBusinessTransaction(form: BusinessForm): Transaction {
+  const itemName = form.itemName.trim();
+  const quantity = parsePositiveNumber(form.quantity);
+  const unitPrice = parsePositiveNumber(form.unitPrice);
+  const total = Math.round(quantity * unitPrice);
+  const note = form.note.trim();
+  const supplier = form.supplier.trim();
+  const paymentLabel = form.paymentMethod.toUpperCase();
+
+  if (form.kind === "sale") {
+    const transactionNote = note || `Penjualan ${itemName}`;
+    const rawText = [
+      `Penjualan ${itemName}`,
+      `${quantity} x ${formatCurrency(unitPrice)}`,
+      paymentLabel,
+      note,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    return {
+      id: `${Date.now()}-${crypto.randomUUID()}`,
+      date: new Date().toISOString().slice(0, 10),
+      type: "income",
+      category: "Penjualan",
+      amount: total,
+      note: transactionNote,
+      rawText,
+    };
+  }
+
+  const transactionNote = note || `Pembelian bahan ${itemName}`;
+  const rawText = [
+    `Pembelian bahan ${itemName}`,
+    `${quantity} ${form.unit} x ${formatCurrency(unitPrice)}`,
+    supplier ? `Supplier: ${supplier}` : "",
+    paymentLabel,
+    note,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+
+  return {
+    id: `${Date.now()}-${crypto.randomUUID()}`,
+    date: new Date().toISOString().slice(0, 10),
+    type: "expense",
+    category: "Bahan/Modal",
+    amount: total,
+    note: transactionNote,
+    rawText,
+  };
+}
+
 function isTransaction(value: unknown): value is Transaction {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -338,6 +427,15 @@ export default function Home() {
     () => dummyTransactions,
   );
   const [rawText, setRawText] = useState("");
+  const [inputMode, setInputMode] = useState<InputMode>("quick");
+  const [businessForm, setBusinessForm] =
+    useState<BusinessForm>(initialBusinessForm);
+
+  const businessQuantity = parsePositiveNumber(businessForm.quantity);
+  const businessUnitPrice = parsePositiveNumber(businessForm.unitPrice);
+  const businessTotal = Math.round(businessQuantity * businessUnitPrice);
+  const canSubmitBusiness =
+    businessForm.itemName.trim().length > 0 && businessTotal > 0;
 
   const totals = useMemo(() => {
     return transactions.reduce(
@@ -398,6 +496,30 @@ export default function Home() {
 
     writeTransactions([transaction, ...transactions]);
     setRawText("");
+  }
+
+  function updateBusinessForm<Field extends keyof BusinessForm>(
+    field: Field,
+    value: BusinessForm[Field],
+  ) {
+    setBusinessForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function addBusinessTransaction() {
+    if (!canSubmitBusiness) {
+      return;
+    }
+
+    const transaction = createBusinessTransaction(businessForm);
+    writeTransactions([transaction, ...transactions]);
+    setBusinessForm((current) => ({
+      ...initialBusinessForm,
+      kind: current.kind,
+      paymentMethod: current.paymentMethod,
+    }));
   }
 
   function deleteTransaction(id: string) {
@@ -518,7 +640,7 @@ export default function Home() {
                 <div>
                   <p className="text-sm text-zinc-400">Input transaksi</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
-                    Catat pemasukan atau pengeluaran
+                    Catat cepat atau transaksi usaha
                   </h3>
                 </div>
                 <div className="flex size-10 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-200">
@@ -526,28 +648,272 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-3">
-                <textarea
-                  className="min-h-32 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
-                  onChange={(event) => setRawText(event.target.value)}
-                  placeholder="Contoh: Penjualan nasi 350 ribu, beli bahan 125 ribu, atau bayar listrik 80 ribu"
-                  value={rawText}
-                />
-                <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-zinc-500">
-                    Kategori otomatis untuk pribadi dan UMKM mikro.
-                  </p>
+              <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-[#080b10] p-1">
+                {[
+                  { label: "Catat Cepat", mode: "quick" as const, icon: Send },
+                  {
+                    label: "Transaksi Usaha",
+                    mode: "business" as const,
+                    icon: ShoppingCart,
+                  },
+                ].map((mode) => (
                   <button
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!rawText.trim() || parseAmount(rawText) <= 0}
-                    onClick={() => addTransaction()}
+                    className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition ${
+                      inputMode === mode.mode
+                        ? "bg-white text-zinc-950"
+                        : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                    key={mode.mode}
+                    onClick={() => setInputMode(mode.mode)}
                     type="button"
                   >
-                    <Send size={16} />
-                    Tambah transaksi
+                    <mode.icon size={16} />
+                    {mode.label}
                   </button>
-                </div>
+                ))}
               </div>
+
+              {inputMode === "quick" ? (
+                <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-3">
+                  <textarea
+                    className="min-h-32 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
+                    onChange={(event) => setRawText(event.target.value)}
+                    placeholder="Contoh: Penjualan nasi 350 ribu, beli bahan 125 ribu, atau bayar listrik 80 ribu"
+                    value={rawText}
+                  />
+                  <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-zinc-500">
+                      Natural language untuk transaksi umum.
+                    </p>
+                    <button
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!rawText.trim() || parseAmount(rawText) <= 0}
+                      onClick={() => addTransaction()}
+                      type="button"
+                    >
+                      <Send size={16} />
+                      Tambah transaksi
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-4">
+                  <div>
+                    <label
+                      className="text-sm font-medium text-zinc-300"
+                      htmlFor="business-kind"
+                    >
+                      Jenis Transaksi
+                    </label>
+                    <select
+                      className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      id="business-kind"
+                      onChange={(event) =>
+                        updateBusinessForm(
+                          "kind",
+                          event.target.value as BusinessTransactionKind,
+                        )
+                      }
+                      value={businessForm.kind}
+                    >
+                      <option value="sale">Penjualan</option>
+                      <option value="material">Pembelian Bahan</option>
+                    </select>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-item"
+                      >
+                        {businessForm.kind === "sale"
+                          ? "Nama item"
+                          : "Nama bahan"}
+                      </label>
+                      <input
+                        className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-cyan-300/60"
+                        id="business-item"
+                        onChange={(event) =>
+                          updateBusinessForm("itemName", event.target.value)
+                        }
+                        placeholder={
+                          businessForm.kind === "sale"
+                            ? "Nasi box"
+                            : "Tepung terigu"
+                        }
+                        type="text"
+                        value={businessForm.itemName}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-quantity"
+                      >
+                        Qty
+                      </label>
+                      <input
+                        className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-cyan-300/60"
+                        id="business-quantity"
+                        min="0"
+                        onChange={(event) =>
+                          updateBusinessForm("quantity", event.target.value)
+                        }
+                        step="0.01"
+                        type="number"
+                        value={businessForm.quantity}
+                      />
+                    </div>
+
+                    {businessForm.kind === "material" ? (
+                      <div>
+                        <label
+                          className="text-sm font-medium text-zinc-300"
+                          htmlFor="business-unit"
+                        >
+                          Satuan
+                        </label>
+                        <select
+                          className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                          id="business-unit"
+                          onChange={(event) =>
+                            updateBusinessForm(
+                              "unit",
+                              event.target.value as MaterialUnit,
+                            )
+                          }
+                          value={businessForm.unit}
+                        >
+                          <option value="pcs">pcs</option>
+                          <option value="kg">kg</option>
+                          <option value="gram">gram</option>
+                          <option value="liter">liter</option>
+                          <option value="pack">pack</option>
+                          <option value="lainnya">lainnya</option>
+                        </select>
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-unit-price"
+                      >
+                        Harga satuan
+                      </label>
+                      <input
+                        className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-cyan-300/60"
+                        id="business-unit-price"
+                        min="0"
+                        onChange={(event) =>
+                          updateBusinessForm("unitPrice", event.target.value)
+                        }
+                        placeholder="0"
+                        step="100"
+                        type="number"
+                        value={businessForm.unitPrice}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-total"
+                      >
+                        Total otomatis
+                      </label>
+                      <div
+                        className="mt-2 flex h-11 items-center rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-white"
+                        id="business-total"
+                      >
+                        {formatCurrency(businessTotal)}
+                      </div>
+                    </div>
+
+                    {businessForm.kind === "material" ? (
+                      <div>
+                        <label
+                          className="text-sm font-medium text-zinc-300"
+                          htmlFor="business-supplier"
+                        >
+                          Supplier optional
+                        </label>
+                        <input
+                          className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-cyan-300/60"
+                          id="business-supplier"
+                          onChange={(event) =>
+                            updateBusinessForm("supplier", event.target.value)
+                          }
+                          placeholder="Nama supplier"
+                          type="text"
+                          value={businessForm.supplier}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-payment"
+                      >
+                        Metode pembayaran
+                      </label>
+                      <select
+                        className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                        id="business-payment"
+                        onChange={(event) =>
+                          updateBusinessForm(
+                            "paymentMethod",
+                            event.target.value as PaymentMethod,
+                          )
+                        }
+                        value={businessForm.paymentMethod}
+                      >
+                        <option value="cash">cash</option>
+                        <option value="qris">qris</option>
+                        <option value="transfer">transfer</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-note"
+                      >
+                        Catatan optional
+                      </label>
+                      <textarea
+                        className="mt-2 min-h-20 w-full resize-none rounded-lg border border-white/10 bg-[#0d1118] px-3 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-cyan-300/60"
+                        id="business-note"
+                        onChange={(event) =>
+                          updateBusinessForm("note", event.target.value)
+                        }
+                        placeholder="Catatan singkat"
+                        value={businessForm.note}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-zinc-500">
+                      {businessForm.kind === "sale"
+                        ? "Disimpan sebagai pemasukan kategori Penjualan."
+                        : "Disimpan sebagai pengeluaran kategori Bahan/Modal."}
+                    </p>
+                    <button
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!canSubmitBusiness}
+                      onClick={addBusinessTransaction}
+                      type="button"
+                    >
+                      <Package size={16} />
+                      Simpan transaksi
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-5">
