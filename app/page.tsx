@@ -348,30 +348,68 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+const moneyUnitMultipliers: Record<string, number> = {
+  rb: 1_000,
+  ribu: 1_000,
+  k: 1_000,
+  jt: 1_000_000,
+  juta: 1_000_000,
+  m: 1_000_000,
+};
+
+const quantityUnits = new Set([
+  "pcs",
+  "kg",
+  "gram",
+  "liter",
+  "pack",
+  "butir",
+  "porsi",
+]);
+
+const transactionActionPattern =
+  /\b(?:transfer\s+masuk|ambil\s+pribadi|penjualan|jual|beli|bayar|gaji|bonus|modal)\b/gi;
+
+function parseAmountValue(value: string) {
+  const parsed = Number(value.replace(",", "."));
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function parseAmount(rawText: string) {
-  const normalized = rawText.toLowerCase().replace(",", ".");
-  const match = normalized.match(/(\d+(?:\.\d+)?)\s*(juta|jt|ribu|rb|k)?/);
+  const normalized = rawText.toLowerCase();
+  const moneyPattern = /(\d+(?:[,.]\d+)?)\s*(rb|ribu|jt|juta|k|m)\b/g;
+  const moneyMatches = Array.from(normalized.matchAll(moneyPattern));
 
-  if (!match) {
+  if (moneyMatches.length > 0) {
+    const match = moneyMatches[0];
+    const value = parseAmountValue(match[1]);
+    const multiplier = moneyUnitMultipliers[match[2]] ?? 1;
+
+    return Math.round(value * multiplier);
+  }
+
+  const numberPattern = /\d+(?:[,.]\d+)?/g;
+  const numberMatches = Array.from(normalized.matchAll(numberPattern));
+  const amountMatch = numberMatches.find((match) => {
+    const previousWord = normalized
+      .slice(0, match.index)
+      .match(/([a-z]+)\s*$/)?.[1];
+    const nextWord = normalized
+      .slice(match.index + match[0].length)
+      .match(/^\s*([a-z]+)/)?.[1];
+
+    return !(
+      (previousWord && quantityUnits.has(previousWord)) ||
+      (nextWord && quantityUnits.has(nextWord))
+    );
+  });
+
+  if (!amountMatch) {
     return 0;
   }
 
-  const value = Number(match[1]);
-  const unit = match[2];
-
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-
-  if (unit === "juta" || unit === "jt") {
-    return Math.round(value * 1_000_000);
-  }
-
-  if (unit === "ribu" || unit === "rb" || unit === "k") {
-    return Math.round(value * 1_000);
-  }
-
-  return Math.round(value);
+  return Math.round(parseAmountValue(amountMatch[0]));
 }
 
 function inferType(rawText: string): Transaction["type"] {
@@ -535,8 +573,40 @@ function createTransaction(
 function splitQuickTransactionText(rawText: string) {
   return rawText
     .split(/,(?=\s*\D)|\s+(?:dan|lalu|terus)\s+/i)
+    .flatMap((text) => splitTextByTransactionActions(text))
     .map((text) => text.trim())
     .filter(Boolean);
+}
+
+function splitTextByTransactionActions(rawText: string) {
+  const text = rawText.trim();
+  const matches = Array.from(text.matchAll(transactionActionPattern));
+
+  if (matches.length <= 1) {
+    return [text];
+  }
+
+  const parts: string[] = [];
+  let segmentStart = 0;
+
+  matches.forEach((match) => {
+    const actionStart = match.index ?? 0;
+
+    if (actionStart === segmentStart) {
+      return;
+    }
+
+    const currentSegment = text.slice(segmentStart, actionStart).trim();
+
+    if (parseAmount(currentSegment) > 0) {
+      parts.push(currentSegment);
+      segmentStart = actionStart;
+    }
+  });
+
+  parts.push(text.slice(segmentStart).trim());
+
+  return parts;
 }
 
 function createQuickTransactions(
