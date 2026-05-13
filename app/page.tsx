@@ -1,12 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { hasSupabaseConfig, supabase } from "@/lib/supabaseClient";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   BarChart3,
-  Bell,
   Bot,
   CalendarDays,
   CreditCard,
@@ -14,6 +16,9 @@ import {
   FileText,
   HomeIcon,
   LineChart as LineChartIcon,
+  Lock,
+  LogOut,
+  Mail,
   Menu,
   Package,
   Pencil,
@@ -169,6 +174,210 @@ function getPeriodLabel(period: PeriodFilter) {
   return (
     periodFilterOptions.find((option) => option.value === period)?.label ??
     "Semua"
+  );
+}
+
+function AuthScreen() {
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isRegistering = authMode === "register";
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setAuthError("");
+
+    if (!hasSupabaseConfig || !supabase) {
+      setAuthError(
+        "Supabase belum dikonfigurasi. Isi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const credentials = {
+      email: email.trim(),
+      password,
+    };
+
+    const { data, error } = isRegistering
+      ? await supabase.auth.signUp(credentials)
+      : await supabase.auth.signInWithPassword(credentials);
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    if (isRegistering && !data.session) {
+      setAuthMessage(
+        "Pendaftaran berhasil. Cek email untuk konfirmasi sebelum login.",
+      );
+      setAuthMode("login");
+      setPassword("");
+      return;
+    }
+
+    setAuthMessage(
+      isRegistering ? "Akun berhasil dibuat." : "Login berhasil.",
+    );
+  }
+
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-[#07090d] px-4 py-8 text-zinc-100 sm:px-6">
+      <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center">
+        <div className="grid w-full overflow-hidden rounded-lg border border-white/10 bg-[#0b0f16] shadow-2xl shadow-black/25 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="hidden min-h-[560px] flex-col justify-between bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(16,185,129,0.08)_45%,rgba(7,9,13,0.96))] p-8 lg:flex">
+            <div>
+              <div className="flex size-12 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/20">
+                <Sparkles size={22} />
+              </div>
+              <h1 className="mt-6 text-3xl font-semibold leading-tight text-white">
+                CatatKeu
+              </h1>
+              <p className="mt-3 max-w-md text-sm leading-6 text-zinc-300">
+                Masuk untuk membuka catatan keuangan harian. Data transaksi
+                tetap tersimpan di perangkat ini.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+              <p className="text-sm font-medium text-white">
+                Local-first untuk transaksi
+              </p>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Auth hanya mengatur akses aplikasi. Penyimpanan transaksi belum
+                dipindahkan ke database.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-8 lg:p-10">
+            <div className="mb-8 lg:hidden">
+              <div className="mb-4 flex size-11 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/20">
+                <Sparkles size={20} />
+              </div>
+              <h1 className="text-2xl font-semibold text-white">CatatKeu</h1>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Login untuk membuka aplikasi.
+              </p>
+            </div>
+
+            <div className="mb-7">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-200">
+                {isRegistering ? "Daftar akun" : "Masuk akun"}
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                {isRegistering ? "Buat akun baru" : "Selamat datang kembali"}
+              </h2>
+            </div>
+
+            <div className="mb-6 grid grid-cols-2 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+              <button
+                className={`h-10 rounded-md text-sm font-medium transition ${
+                  !isRegistering
+                    ? "bg-cyan-200 text-zinc-950"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
+                type="button"
+              >
+                Login
+              </button>
+              <button
+                className={`h-10 rounded-md text-sm font-medium transition ${
+                  isRegistering
+                    ? "bg-cyan-200 text-zinc-950"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => {
+                  setAuthMode("register");
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
+                type="button"
+              >
+                Register
+              </button>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleAuthSubmit}>
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-300">Email</span>
+                <span className="mt-2 flex h-12 items-center gap-3 rounded-lg border border-white/10 bg-[#080b10] px-3 text-zinc-300 focus-within:border-cyan-200/60">
+                  <Mail size={18} />
+                  <input
+                    autoComplete="email"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="nama@email.com"
+                    required
+                    type="email"
+                    value={email}
+                  />
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-300">
+                  Password
+                </span>
+                <span className="mt-2 flex h-12 items-center gap-3 rounded-lg border border-white/10 bg-[#080b10] px-3 text-zinc-300 focus-within:border-cyan-200/60">
+                  <Lock size={18} />
+                  <input
+                    autoComplete={
+                      isRegistering ? "new-password" : "current-password"
+                    }
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                    minLength={6}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Minimal 6 karakter"
+                    required
+                    type="password"
+                    value={password}
+                  />
+                </span>
+              </label>
+
+              {authError ? (
+                <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-sm leading-6 text-rose-200">
+                  {authError}
+                </p>
+              ) : null}
+
+              {authMessage ? (
+                <p className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm leading-6 text-emerald-200">
+                  {authMessage}
+                </p>
+              ) : null}
+
+              <button
+                className="flex h-12 w-full items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting}
+                type="submit"
+              >
+                {isSubmitting
+                  ? "Memproses..."
+                  : isRegistering
+                    ? "Daftar"
+                    : "Login"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -806,6 +1015,8 @@ function writeTransactions(transactions: Transaction[]) {
 }
 
 export default function Home() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [transactions, setTransactions] =
     useState<Transaction[]>(dummyTransactions);
   const [rawText, setRawText] = useState("");
@@ -834,6 +1045,40 @@ export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>("quick");
   const [businessForm, setBusinessForm] =
     useState<BusinessForm>(initialBusinessForm);
+
+  useEffect(() => {
+    if (!supabase) {
+      setIsAuthLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (isMounted) {
+          setSession(data.session);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsAuthLoading(false);
+        }
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setIsAuthLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const syncTransactions = () => {
@@ -1453,6 +1698,31 @@ export default function Home() {
     setEditingTransactionId(null);
   }
 
+  async function handleLogout() {
+    if (!supabase) {
+      return;
+    }
+
+    await supabase.auth.signOut();
+  }
+
+  if (isAuthLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#07090d] px-6 text-zinc-100">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/20">
+            <Sparkles size={20} />
+          </div>
+          <p className="text-sm font-medium text-zinc-300">Memuat sesi...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen />;
+  }
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#07090d] text-zinc-100">
       <div className="min-h-screen w-full">
@@ -1529,23 +1799,14 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label="Cari"
-                  className="hidden size-10 items-center justify-center rounded-lg border border-white/10 text-zinc-300 transition hover:bg-white/5 sm:flex"
-                  type="button"
-                >
-                  <Search size={18} />
-                </button>
-                <button
-                  aria-label="Notifikasi"
-                  className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-zinc-300 transition hover:bg-white/5"
-                  type="button"
-                >
-                  <Bell size={18} />
-                </button>
-              </div>
+              <button
+                className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                onClick={handleLogout}
+                type="button"
+              >
+                <LogOut size={16} />
+                <span className="hidden sm:inline">Keluar</span>
+              </button>
             </div>
             {isMobileNavOpen ? (
               <nav className="fixed inset-x-4 top-[84px] z-30 grid gap-2 rounded-lg border border-white/10 bg-[#0b0f16]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:left-auto sm:w-80 xl:hidden">
