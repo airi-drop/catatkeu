@@ -16,6 +16,7 @@ import {
   LineChart as LineChartIcon,
   Menu,
   Package,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -45,11 +46,18 @@ const MoneyFlowChart = dynamic(() => import("./MoneyFlowChart"), {
 
 type TransactionSpace = "personal" | "business";
 type SpaceFilter = "all" | TransactionSpace;
-type PeriodFilter = "today" | "week" | "month" | "all";
-type ActivePage = "dashboard" | "analytics";
+type PeriodFilter = "today" | "week" | "month" | "all" | "custom";
+type ActivePage = "dashboard" | "transactions" | "analytics";
 type InputMode = "quick" | "business";
 type HistoryTypeFilter = "all" | Transaction["type"];
 type HistorySort = "newest" | "oldest" | "amount-desc" | "amount-asc";
+type EditTransactionForm = {
+  amount: string;
+  category: string;
+  date: string;
+  note: string;
+  space: TransactionSpace;
+};
 type BusinessTransactionKind = "sale" | "material";
 type PaymentMethod = "cash" | "qris" | "transfer";
 type MaterialUnit = "pcs" | "kg" | "gram" | "liter" | "pack" | "lainnya";
@@ -114,6 +122,7 @@ const dummyTransactions: Transaction[] = [
 
 const navItems = [
   { label: "Dashboard", icon: HomeIcon, page: "dashboard" as const },
+  { label: "Transaksi", icon: CreditCard, page: "transactions" as const },
   { label: "Analitik", icon: BarChart3, page: "analytics" as const },
 ] satisfies { icon: typeof HomeIcon; label: string; page: ActivePage }[];
 
@@ -131,7 +140,8 @@ const periodFilterOptions: { label: string; value: PeriodFilter }[] = [
   { label: "Hari ini", value: "today" },
   { label: "Minggu ini", value: "week" },
   { label: "Bulan ini", value: "month" },
-  { label: "Semua periode", value: "all" },
+  { label: "Semua", value: "all" },
+  { label: "Custom tanggal", value: "custom" },
 ];
 
 const historyTypeFilterOptions: { label: string; value: HistoryTypeFilter }[] =
@@ -275,9 +285,18 @@ function getMonthRange(date: Date) {
   return { end: toDateKey(end), start: toDateKey(start) };
 }
 
-function isInPeriod(date: string, period: PeriodFilter, todayKey: string) {
+function isInPeriod(
+  date: string,
+  period: PeriodFilter,
+  todayKey: string,
+  customDate = todayKey,
+) {
   if (period === "all") {
     return true;
+  }
+
+  if (period === "custom") {
+    return isValidDateKey(customDate) && date === customDate;
   }
 
   if (period === "today") {
@@ -801,6 +820,17 @@ export default function Home() {
   const [historyTypeFilter, setHistoryTypeFilter] =
     useState<HistoryTypeFilter>("all");
   const [historySort, setHistorySort] = useState<HistorySort>("newest");
+  const [historyCustomDate, setHistoryCustomDate] = useState(getTodayDateKey);
+  const [editingTransactionId, setEditingTransactionId] = useState<
+    string | null
+  >(null);
+  const [editForm, setEditForm] = useState<EditTransactionForm>({
+    amount: "",
+    category: "",
+    date: getTodayDateKey(),
+    note: "",
+    space: "business",
+  });
   const [selectedDate, setSelectedDate] = useState(getTodayDateKey);
   const [inputMode, setInputMode] = useState<InputMode>("quick");
   const [businessForm, setBusinessForm] =
@@ -849,15 +879,20 @@ export default function Home() {
 
       const matchesSpace =
         spaceFilter === "all" || transaction.space === spaceFilter;
-      const matchesPeriod = isInPeriod(
-        transactionDateKey,
-        periodFilter,
-        todayKey,
-      );
+      const matchesPeriod =
+        activePage === "dashboard" ||
+        isInPeriod(transactionDateKey, periodFilter, todayKey, historyCustomDate);
 
       return matchesSpace && matchesPeriod;
     });
-  }, [periodFilter, spaceFilter, todayKey, transactions]);
+  }, [
+    activePage,
+    historyCustomDate,
+    periodFilter,
+    spaceFilter,
+    todayKey,
+    transactions,
+  ]);
 
   const totals = useMemo(() => {
     return filteredTransactions.reduce(
@@ -1006,6 +1041,10 @@ export default function Home() {
     }),
     [filteredTransactions],
   );
+
+  const latestTransactions = useMemo(() => {
+    return [...transactions].sort(compareTransactionsByRecency).slice(0, 5);
+  }, [transactions]);
 
   const businessSummary = useMemo(() => {
     return filteredTransactions.reduce(
@@ -1260,7 +1299,7 @@ export default function Home() {
   }
 
   function showSubmittedDateIfFilteredOut(date: string) {
-    if (!isInPeriod(date, periodFilter, todayKey)) {
+    if (!isInPeriod(date, periodFilter, todayKey, historyCustomDate)) {
       setPeriodFilter("all");
     }
   }
@@ -1356,6 +1395,63 @@ export default function Home() {
     commitTransactions(
       transactions.filter((transaction) => transaction.id !== id),
     );
+
+    if (editingTransactionId === id) {
+      setEditingTransactionId(null);
+    }
+  }
+
+  function startEditTransaction(transaction: Transaction) {
+    setEditingTransactionId(transaction.id);
+    setEditForm({
+      amount: String(transaction.amount),
+      category: transaction.category,
+      date: transaction.date,
+      note: transaction.note,
+      space: transaction.space,
+    });
+  }
+
+  function updateEditForm<Field extends keyof EditTransactionForm>(
+    field: Field,
+    value: EditTransactionForm[Field],
+  ) {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function cancelEditTransaction() {
+    setEditingTransactionId(null);
+  }
+
+  function saveEditTransaction(id: string) {
+    const amount = Math.round(Number(editForm.amount));
+    const date = normalizeDateKey(editForm.date);
+    const category = editForm.category.trim();
+    const note = editForm.note.trim();
+
+    if (!Number.isFinite(amount) || amount <= 0 || !date || !category || !note) {
+      return;
+    }
+
+    commitTransactions(
+      transactions.map((transaction) =>
+        transaction.id === id
+          ? {
+              ...transaction,
+              amount,
+              category,
+              date,
+              note,
+              rawText: transaction.rawText || note,
+              space: editForm.space,
+            }
+          : transaction,
+      ),
+    );
+    setEditingTransactionId(null);
   }
 
   return (
@@ -1423,7 +1519,9 @@ export default function Home() {
                   <h2 className="text-xl font-semibold text-white sm:text-2xl">
                     {activePage === "dashboard"
                       ? "Ringkasan Uang Harian"
-                      : "Analitik Keuangan"}
+                      : activePage === "transactions"
+                        ? "Pusat Transaksi"
+                        : "Analitik Keuangan"}
                   </h2>
                 </div>
               </div>
@@ -1500,7 +1598,8 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                {activePage === "analytics" ? (
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                   <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
                     Periode
                   </p>
@@ -1520,7 +1619,8 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                </div>
+                  </div>
+                ) : null}
               </div>
               {summaryCards.map((card, index) => (
                 <article
@@ -1904,6 +2004,335 @@ export default function Home() {
               </section>
             ) : null}
 
+            {activePage === "transactions" ? (
+              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-12 lg:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-zinc-400">Transaksi</p>
+                    <h3 className="mt-1 text-lg font-semibold text-white">
+                      Pencarian dan pengelolaan
+                    </h3>
+                  </div>
+                  <p className="rounded-lg border border-white/10 bg-[#080b10] px-3 py-2 text-sm text-zinc-400">
+                    {sortedTransactions.length} dari {filteredTransactions.length} transaksi
+                  </p>
+                </div>
+
+                <div className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-500">
+                      Search transaksi
+                    </span>
+                    <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#0d1118] px-3 text-zinc-400">
+                      <Search size={16} />
+                      <input
+                        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                        onChange={(event) =>
+                          setHistorySearch(event.target.value)
+                        }
+                        placeholder="Cari catatan"
+                        type="search"
+                        value={historySearch}
+                      />
+                    </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-500">
+                      Kategori
+                    </span>
+                    <select
+                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      onChange={(event) =>
+                        setHistoryCategoryFilter(event.target.value)
+                      }
+                      value={historyCategoryFilter}
+                    >
+                      <option value="all">Semua kategori</option>
+                      {historyCategoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-500">
+                      Tipe
+                    </span>
+                    <select
+                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      onChange={(event) =>
+                        setHistoryTypeFilter(
+                          event.target.value as HistoryTypeFilter,
+                        )
+                      }
+                      value={historyTypeFilter}
+                    >
+                      {historyTypeFilterOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-500">
+                      Sort
+                    </span>
+                    <select
+                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      onChange={(event) =>
+                        setHistorySort(event.target.value as HistorySort)
+                      }
+                      value={historySort}
+                    >
+                      {historySortOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-white/10 bg-[#080b10] p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+                    Filter tanggal
+                  </p>
+                  <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                      {periodFilterOptions.map((option) => (
+                        <button
+                          className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                            periodFilter === option.value
+                              ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
+                              : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+                          }`}
+                          key={option.value}
+                          onClick={() => setPeriodFilter(option.value)}
+                          type="button"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    {periodFilter === "custom" ? (
+                      <label
+                        className="flex items-center gap-2 text-sm text-zinc-400"
+                        htmlFor="history-custom-date"
+                      >
+                        <CalendarDays size={16} />
+                        <input
+                          className="h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-44"
+                          id="history-custom-date"
+                          onChange={(event) =>
+                            setHistoryCustomDate(event.target.value)
+                          }
+                          type="date"
+                          value={historyCustomDate}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-5 min-h-72 space-y-3">
+                  {sortedTransactions.length > 0 ? (
+                    sortedTransactions.map((transaction) => {
+                      const isEditing = editingTransactionId === transaction.id;
+
+                      return (
+                        <article
+                          className="rounded-lg border border-white/10 bg-[#080b10] p-4 transition hover:border-cyan-200/20 hover:bg-[#0b111a]"
+                          key={transaction.id}
+                        >
+                          {isEditing ? (
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                              <label className="block">
+                                <span className="text-xs font-medium text-zinc-500">
+                                  Nominal
+                                </span>
+                                <input
+                                  className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                                  min="0"
+                                  onChange={(event) =>
+                                    updateEditForm("amount", event.target.value)
+                                  }
+                                  type="number"
+                                  value={editForm.amount}
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-medium text-zinc-500">
+                                  Kategori
+                                </span>
+                                <input
+                                  className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                                  onChange={(event) =>
+                                    updateEditForm(
+                                      "category",
+                                      event.target.value,
+                                    )
+                                  }
+                                  type="text"
+                                  value={editForm.category}
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-medium text-zinc-500">
+                                  Tanggal
+                                </span>
+                                <input
+                                  className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                                  onChange={(event) =>
+                                    updateEditForm("date", event.target.value)
+                                  }
+                                  type="date"
+                                  value={editForm.date}
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-medium text-zinc-500">
+                                  Ruang catatan
+                                </span>
+                                <select
+                                  className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                                  onChange={(event) =>
+                                    updateEditForm(
+                                      "space",
+                                      event.target.value as TransactionSpace,
+                                    )
+                                  }
+                                  value={editForm.space}
+                                >
+                                  {spaceOptions.map((option) => (
+                                    <option
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="block md:col-span-2 xl:col-span-5">
+                                <span className="text-xs font-medium text-zinc-500">
+                                  Catatan
+                                </span>
+                                <textarea
+                                  className="mt-2 min-h-20 w-full resize-none rounded-lg border border-white/10 bg-[#0d1118] px-3 py-3 text-sm leading-6 text-white outline-none transition focus:border-cyan-300/60"
+                                  onChange={(event) =>
+                                    updateEditForm("note", event.target.value)
+                                  }
+                                  value={editForm.note}
+                                />
+                              </label>
+                              <div className="flex flex-col gap-2 md:col-span-2 md:flex-row xl:col-span-5">
+                                <button
+                                  className="inline-flex h-10 items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100"
+                                  onClick={() =>
+                                    saveEditTransaction(transaction.id)
+                                  }
+                                  type="button"
+                                >
+                                  Simpan
+                                </button>
+                                <button
+                                  className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                                  onClick={cancelEditTransaction}
+                                  type="button"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium text-white">
+                                    {transaction.note}
+                                  </p>
+                                  <span
+                                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                                      transaction.type === "income"
+                                        ? "bg-emerald-400/10 text-emerald-200"
+                                        : "bg-rose-400/10 text-rose-200"
+                                    }`}
+                                  >
+                                    {getTransactionTypeLabel(transaction.type)}
+                                  </span>
+                                  <span className="rounded-md bg-white/5 px-2.5 py-1 text-xs font-medium text-zinc-300">
+                                    {getSpaceLabel(transaction.space)}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-sm text-zinc-500">
+                                  {formatDate(transaction.date)} -{" "}
+                                  {transaction.category}
+                                </p>
+                                <p className="mt-1 truncate text-sm text-zinc-600">
+                                  {transaction.rawText}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                                <p
+                                  className={`text-right font-semibold ${
+                                    transaction.type === "income"
+                                      ? "text-emerald-300"
+                                      : "text-rose-300"
+                                  }`}
+                                >
+                                  {transaction.type === "income" ? "+" : "-"}
+                                  {formatCurrency(transaction.amount)}
+                                </p>
+                                <button
+                                  aria-label={`Edit transaksi ${transaction.note}`}
+                                  className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-cyan-200"
+                                  onClick={() =>
+                                    startEditTransaction(transaction)
+                                  }
+                                  type="button"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  aria-label={`Hapus transaksi ${transaction.note}`}
+                                  className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200"
+                                  onClick={() =>
+                                    deleteTransaction(transaction.id)
+                                  }
+                                  type="button"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-white/10 bg-[#080b10] px-6 text-center">
+                      <div>
+                        <CreditCard
+                          className="mx-auto text-zinc-600"
+                          size={34}
+                        />
+                        <p className="mt-3 text-sm text-zinc-500">
+                          {filteredTransactions.length > 0
+                            ? "Tidak ada transaksi yang cocok dengan filter."
+                            : "Belum ada transaksi pada filter tanggal dan ruang ini."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
             {activePage === "analytics" ? (
               <>
                 <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-8 lg:p-6">
@@ -2108,7 +2537,7 @@ export default function Home() {
                 <div>
                   <p className="text-sm text-zinc-400">Riwayat</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
-                    Catatan terbaru
+                    5 transaksi terbaru
                   </h3>
                 </div>
                 <button
@@ -2124,88 +2553,10 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
-                <label className="block">
-                  <span className="text-xs font-medium text-zinc-500">
-                    Search transaksi
-                  </span>
-                  <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#0d1118] px-3 text-zinc-400">
-                    <Search size={16} />
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
-                      onChange={(event) => setHistorySearch(event.target.value)}
-                      placeholder="Cari catatan"
-                      type="search"
-                      value={historySearch}
-                    />
-                  </div>
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-medium text-zinc-500">
-                    Kategori
-                  </span>
-                  <select
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
-                    onChange={(event) =>
-                      setHistoryCategoryFilter(event.target.value)
-                    }
-                    value={historyCategoryFilter}
-                  >
-                    <option value="all">Semua kategori</option>
-                    {historyCategoryOptions.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-medium text-zinc-500">
-                    Tipe
-                  </span>
-                  <select
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
-                    onChange={(event) =>
-                      setHistoryTypeFilter(
-                        event.target.value as HistoryTypeFilter,
-                      )
-                    }
-                    value={historyTypeFilter}
-                  >
-                    {historyTypeFilterOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-medium text-zinc-500">
-                    Sort
-                  </span>
-                  <select
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
-                    onChange={(event) =>
-                      setHistorySort(event.target.value as HistorySort)
-                    }
-                    value={historySort}
-                  >
-                    {historySortOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
               <div className="mt-5 min-h-52 rounded-lg border border-white/10 bg-[#080b10]">
-                {sortedTransactions.length > 0 ? (
+                {latestTransactions.length > 0 ? (
                   <div className="divide-y divide-white/10">
-                    {sortedTransactions.map((transaction) => (
+                    {latestTransactions.map((transaction) => (
                       <article
                         className="flex flex-col gap-4 px-4 py-4 transition hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between"
                         key={transaction.id}
@@ -2249,14 +2600,6 @@ export default function Home() {
                             {transaction.type === "income" ? "+" : "-"}
                             {formatCurrency(transaction.amount)}
                           </p>
-                          <button
-                            aria-label={`Hapus transaksi ${transaction.note}`}
-                            className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200"
-                            onClick={() => deleteTransaction(transaction.id)}
-                            type="button"
-                          >
-                            <Trash2 size={16} />
-                          </button>
                         </div>
                       </article>
                     ))}
@@ -2266,9 +2609,8 @@ export default function Home() {
                     <div>
                       <CreditCard className="mx-auto text-zinc-600" size={34} />
                       <p className="mt-3 text-sm text-zinc-500">
-                        {filteredTransactions.length > 0
-                          ? "Tidak ada transaksi yang cocok dengan filter riwayat."
-                          : "Belum ada catatan. Tulis pemasukan, belanja pribadi, atau transaksi usaha mikro pertama."}
+                        Belum ada catatan. Tulis pemasukan, belanja pribadi,
+                        atau transaksi usaha mikro pertama.
                       </p>
                     </div>
                   </div>
