@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  CalendarDays,
   CreditCard,
   HomeIcon,
   LineChart as LineChartIcon,
@@ -43,6 +44,7 @@ const MoneyFlowChart = dynamic(() => import("./MoneyFlowChart"), {
 
 type TransactionSpace = "personal" | "business";
 type SpaceFilter = "all" | TransactionSpace;
+type PeriodFilter = "today" | "week" | "month" | "all";
 type InputMode = "quick" | "business";
 type BusinessTransactionKind = "sale" | "material";
 type PaymentMethod = "cash" | "qris" | "transfer";
@@ -123,8 +125,22 @@ const spaceFilterOptions: { label: string; value: SpaceFilter }[] = [
   ...spaceOptions,
 ];
 
+const periodFilterOptions: { label: string; value: PeriodFilter }[] = [
+  { label: "Hari ini", value: "today" },
+  { label: "Minggu ini", value: "week" },
+  { label: "Bulan ini", value: "month" },
+  { label: "Semua", value: "all" },
+];
+
 function getSpaceLabel(space: TransactionSpace) {
   return space === "personal" ? "Pribadi" : "Usaha";
+}
+
+function getPeriodLabel(period: PeriodFilter) {
+  return (
+    periodFilterOptions.find((option) => option.value === period)?.label ??
+    "Semua"
+  );
 }
 
 function formatCurrency(amount: number) {
@@ -145,11 +161,58 @@ function formatDate(date: string) {
 
 function getTodayDateKey() {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const date = String(today.getDate()).padStart(2, "0");
+  return toDateKey(today);
+}
 
-  return `${year}-${month}-${date}`;
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isValidDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && toDateKey(date) === value;
+}
+
+function getWeekRange(date: Date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diffToMonday);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  return { end: toDateKey(end), start: toDateKey(start) };
+}
+
+function getMonthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+  return { end: toDateKey(end), start: toDateKey(start) };
+}
+
+function isInPeriod(date: string, period: PeriodFilter, todayKey: string) {
+  if (period === "all") {
+    return true;
+  }
+
+  if (period === "today") {
+    return date === todayKey;
+  }
+
+  const today = new Date(`${todayKey}T00:00:00`);
+  const range = period === "week" ? getWeekRange(today) : getMonthRange(today);
+
+  return date >= range.start && date <= range.end;
 }
 
 function parseAmount(rawText: string) {
@@ -317,6 +380,7 @@ function inferCategory(rawText: string, type: Transaction["type"]) {
 function createTransaction(
   rawText: string,
   space: TransactionSpace = "business",
+  date = getTodayDateKey(),
 ): Transaction {
   const type = inferType(rawText);
   const amount = parseAmount(rawText);
@@ -324,7 +388,7 @@ function createTransaction(
 
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
-    date: new Date().toISOString().slice(0, 10),
+    date,
     type,
     space,
     category: inferCategory(trimmedText, type),
@@ -341,9 +405,13 @@ function splitQuickTransactionText(rawText: string) {
     .filter(Boolean);
 }
 
-function createQuickTransactions(rawText: string, space: TransactionSpace) {
+function createQuickTransactions(
+  rawText: string,
+  space: TransactionSpace,
+  date = getTodayDateKey(),
+) {
   return splitQuickTransactionText(rawText)
-    .map((text) => createTransaction(text, space))
+    .map((text) => createTransaction(text, space, date))
     .filter((transaction) => transaction.amount > 0);
 }
 
@@ -354,7 +422,10 @@ function parsePositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function createBusinessTransaction(form: BusinessForm): Transaction {
+function createBusinessTransaction(
+  form: BusinessForm,
+  date = getTodayDateKey(),
+): Transaction {
   const itemName = form.itemName.trim();
   const quantity = parsePositiveNumber(form.quantity);
   const unitPrice = parsePositiveNumber(form.unitPrice);
@@ -376,7 +447,7 @@ function createBusinessTransaction(form: BusinessForm): Transaction {
 
     return {
       id: `${Date.now()}-${crypto.randomUUID()}`,
-      date: new Date().toISOString().slice(0, 10),
+      date,
       type: "income",
       space: "business",
       category: "Penjualan",
@@ -399,7 +470,7 @@ function createBusinessTransaction(form: BusinessForm): Transaction {
 
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
-    date: new Date().toISOString().slice(0, 10),
+    date,
     type: "expense",
     space: "business",
     category: "Bahan/Modal",
@@ -415,11 +486,10 @@ function normalizeTransaction(value: unknown): Transaction | null {
   }
 
   const transaction = value as Record<string, unknown>;
-  const { amount, category, date, id, note, rawText, type } = transaction;
+  const { amount, category, id, note, rawText, type } = transaction;
 
   const isBaseTransaction =
     typeof id === "string" &&
-    typeof date === "string" &&
     (type === "income" || type === "expense") &&
     typeof category === "string" &&
     typeof amount === "number" &&
@@ -434,6 +504,10 @@ function normalizeTransaction(value: unknown): Transaction | null {
     transaction.space === "personal" || transaction.space === "business"
       ? transaction.space
       : "business";
+  const date =
+    typeof transaction.date === "string" && isValidDateKey(transaction.date)
+      ? transaction.date
+      : getTodayDateKey();
 
   return {
     id,
@@ -465,11 +539,9 @@ function parseTransactions(stored: string | null) {
       return cachedTransactions;
     }
 
-    const normalizedTransactions = parsed.map(normalizeTransaction);
-
-    cachedTransactions = normalizedTransactions.every(Boolean)
-      ? (normalizedTransactions as Transaction[])
-      : dummyTransactions;
+    cachedTransactions = parsed
+      .map(normalizeTransaction)
+      .filter((transaction): transaction is Transaction => Boolean(transaction));
   } catch {
     cachedTransactions = dummyTransactions;
   }
@@ -514,9 +586,13 @@ export default function Home() {
   const [rawText, setRawText] = useState("");
   const [quickFeedback, setQuickFeedback] = useState("");
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today");
+  const [transactionDate, setTransactionDate] = useState(getTodayDateKey);
   const [inputMode, setInputMode] = useState<InputMode>("quick");
   const [businessForm, setBusinessForm] =
     useState<BusinessForm>(initialBusinessForm);
+  const todayKey = getTodayDateKey();
+  const periodLabel = getPeriodLabel(periodFilter);
 
   const businessQuantity = parsePositiveNumber(businessForm.quantity);
   const businessUnitPrice = parsePositiveNumber(businessForm.unitPrice);
@@ -529,23 +605,28 @@ export default function Home() {
       : null;
   const activeInputMode =
     activeInputSpace === "business" ? inputMode : "quick";
+  const hasValidTransactionDate = isValidDateKey(transactionDate);
   const quickTransactions = useMemo(
     () =>
       activeInputSpace
-        ? createQuickTransactions(rawText, activeInputSpace)
+        ? createQuickTransactions(rawText, activeInputSpace, transactionDate)
         : [],
-    [activeInputSpace, rawText],
+    [activeInputSpace, rawText, transactionDate],
   );
 
   const filteredTransactions = useMemo(() => {
-    if (spaceFilter === "all") {
-      return transactions;
-    }
+    return transactions.filter((transaction) => {
+      const matchesSpace =
+        spaceFilter === "all" || transaction.space === spaceFilter;
+      const matchesPeriod = isInPeriod(
+        transaction.date,
+        periodFilter,
+        todayKey,
+      );
 
-    return transactions.filter(
-      (transaction) => transaction.space === spaceFilter,
-    );
-  }, [spaceFilter, transactions]);
+      return matchesSpace && matchesPeriod;
+    });
+  }, [periodFilter, spaceFilter, todayKey, transactions]);
 
   const totals = useMemo(() => {
     return filteredTransactions.reduce(
@@ -564,7 +645,10 @@ export default function Home() {
   }, [filteredTransactions]);
 
   const sortedTransactions = useMemo(() => {
-    return [...filteredTransactions].sort((a, b) => b.date.localeCompare(a.date));
+    return [...filteredTransactions].sort((a, b) => {
+      const dateComparison = b.date.localeCompare(a.date);
+      return dateComparison !== 0 ? dateComparison : b.id.localeCompare(a.id);
+    });
   }, [filteredTransactions]);
 
   const chartData = useMemo(() => {
@@ -595,15 +679,9 @@ export default function Home() {
     );
   }, [filteredTransactions]);
 
-  const dailySummary = useMemo(() => {
-    const today = getTodayDateKey();
-
+  const periodSummary = useMemo(() => {
     return filteredTransactions.reduce(
       (result, transaction) => {
-        if (transaction.date !== today) {
-          return result;
-        }
-
         if (transaction.type === "income") {
           result.income += transaction.amount;
         } else {
@@ -654,21 +732,21 @@ export default function Home() {
     {
       label: "Saldo",
       value: formatCurrency(totals.balance),
-      helper: `${filteredTransactions.length} transaksi ditampilkan`,
+      helper: `${filteredTransactions.length} transaksi - ${periodLabel}`,
       icon: Wallet,
       tone: "text-cyan-300",
     },
     {
       label: "Pemasukan",
       value: formatCurrency(totals.income),
-      helper: "Total saat ini",
+      helper: `Total ${periodLabel.toLowerCase()}`,
       icon: ArrowDownLeft,
       tone: "text-emerald-300",
     },
     {
       label: "Pengeluaran",
       value: formatCurrency(totals.expense),
-      helper: "Total saat ini",
+      helper: `Total ${periodLabel.toLowerCase()}`,
       icon: ArrowUpRight,
       tone: "text-rose-300",
     },
@@ -688,6 +766,7 @@ export default function Home() {
     const nextTransactions = createQuickTransactions(
       trimmedText,
       activeInputSpace,
+      transactionDate,
     );
 
     if (nextTransactions.length <= 0) {
@@ -716,7 +795,10 @@ export default function Home() {
       return;
     }
 
-    const transaction = createBusinessTransaction(businessForm);
+    const transaction = createBusinessTransaction(
+      businessForm,
+      transactionDate,
+    );
     writeTransactions([transaction, ...transactions]);
     setBusinessForm((current) => ({
       ...initialBusinessForm,
@@ -837,6 +919,21 @@ export default function Home() {
                     {option.label}
                   </button>
                 ))}
+                <div className="mx-1 hidden h-6 w-px bg-white/10 sm:block" />
+                {periodFilterOptions.map((option) => (
+                  <button
+                    className={`h-9 rounded-lg px-3 text-sm font-medium transition ${
+                      periodFilter === option.value
+                        ? "bg-cyan-300 text-zinc-950"
+                        : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                    key={option.value}
+                    onClick={() => setPeriodFilter(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
               {summaryCards.map((card) => (
                 <article
@@ -923,6 +1020,26 @@ export default function Home() {
                 </div>
               ) : activeInputMode === "quick" ? (
                 <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-3">
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-medium text-zinc-300">
+                      Catat Cepat
+                    </p>
+                    <label
+                      className="flex items-center gap-2 text-sm text-zinc-400"
+                      htmlFor="quick-date"
+                    >
+                      <CalendarDays size={16} />
+                      <input
+                        className="h-9 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-36"
+                        id="quick-date"
+                        onChange={(event) =>
+                          setTransactionDate(event.target.value)
+                        }
+                        type="date"
+                        value={transactionDate}
+                      />
+                    </label>
+                  </div>
                   <textarea
                     className="min-h-32 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
                     onChange={(event) => {
@@ -940,7 +1057,9 @@ export default function Home() {
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={
-                        !rawText.trim() || quickTransactions.length <= 0
+                        !hasValidTransactionDate ||
+                        !rawText.trim() ||
+                        quickTransactions.length <= 0
                       }
                       onClick={() => addTransaction()}
                       type="button"
@@ -952,27 +1071,49 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-4">
-                  <div>
-                    <label
-                      className="text-sm font-medium text-zinc-300"
-                      htmlFor="business-kind"
-                    >
-                      Jenis Transaksi
-                    </label>
-                    <select
-                      className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
-                      id="business-kind"
-                      onChange={(event) =>
-                        updateBusinessForm(
-                          "kind",
-                          event.target.value as BusinessTransactionKind,
-                        )
-                      }
-                      value={businessForm.kind}
-                    >
-                      <option value="sale">Penjualan</option>
-                      <option value="material">Pembelian Bahan</option>
-                    </select>
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-kind"
+                      >
+                        Jenis Transaksi
+                      </label>
+                      <select
+                        className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                        id="business-kind"
+                        onChange={(event) =>
+                          updateBusinessForm(
+                            "kind",
+                            event.target.value as BusinessTransactionKind,
+                          )
+                        }
+                        value={businessForm.kind}
+                      >
+                        <option value="sale">Penjualan</option>
+                        <option value="material">Pembelian Bahan</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        className="text-sm font-medium text-zinc-300"
+                        htmlFor="business-date"
+                      >
+                        Tanggal
+                      </label>
+                      <div className="mt-2 flex items-center gap-2 text-zinc-400">
+                        <CalendarDays size={16} />
+                        <input
+                          className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-40"
+                          id="business-date"
+                          onChange={(event) =>
+                            setTransactionDate(event.target.value)
+                          }
+                          type="date"
+                          value={transactionDate}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1158,7 +1299,7 @@ export default function Home() {
                     </p>
                     <button
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!canSubmitBusiness}
+                      disabled={!hasValidTransactionDate || !canSubmitBusiness}
                       onClick={addBusinessTransaction}
                       type="button"
                     >
@@ -1197,27 +1338,29 @@ export default function Home() {
             </section>
 
             <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
-              <p className="text-sm text-zinc-400">Ringkasan harian</p>
-              <h3 className="mt-1 text-lg font-semibold text-white">Hari ini</h3>
+              <p className="text-sm text-zinc-400">Ringkasan periode</p>
+              <h3 className="mt-1 text-lg font-semibold text-white">
+                {periodLabel}
+              </h3>
               <div className="mt-5 space-y-3">
                 {[
                   {
                     label: "Pemasukan",
                     tone: "text-emerald-300",
-                    value: dailySummary.income,
+                    value: periodSummary.income,
                   },
                   {
                     label: "Pengeluaran",
                     tone: "text-rose-300",
-                    value: dailySummary.expense,
+                    value: periodSummary.expense,
                   },
                   {
                     label: "Laba/Rugi",
                     tone:
-                      dailySummary.profit >= 0
+                      periodSummary.profit >= 0
                         ? "text-cyan-300"
                         : "text-rose-300",
-                    value: dailySummary.profit,
+                    value: periodSummary.profit,
                   },
                 ].map((item) => (
                   <div
@@ -1284,7 +1427,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="mt-4 text-sm text-zinc-500">
-                Mengikuti filter ruang yang sedang aktif.
+                Mengikuti filter ruang dan periode yang sedang aktif.
               </p>
             </section>
 
