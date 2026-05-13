@@ -10,6 +10,8 @@ import {
   Bot,
   CalendarDays,
   CreditCard,
+  Download,
+  FileText,
   HomeIcon,
   LineChart as LineChartIcon,
   Menu,
@@ -150,6 +152,10 @@ function getSpaceLabel(space: TransactionSpace) {
   return space === "personal" ? "Pribadi" : "Usaha";
 }
 
+function getSpaceFilterLabel(space: SpaceFilter) {
+  return space === "all" ? "Semua" : getSpaceLabel(space);
+}
+
 function getPeriodLabel(period: PeriodFilter) {
   return (
     periodFilterOptions.find((option) => option.value === period)?.label ??
@@ -174,6 +180,19 @@ function formatDate(date: string) {
     month: "long",
     year: "numeric",
   }).format(new Date(year, month - 1, day));
+}
+
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatReportAmount(amount: number) {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function getTodayDateKey() {
@@ -293,6 +312,40 @@ function compareTransactionsByRecency(
   }
 
   return second.id.localeCompare(first.id);
+}
+
+function getReportFileBase(period: PeriodFilter, space: SpaceFilter) {
+  return `catatkeu-${period}-${space}-${getTodayDateKey()}`;
+}
+
+function getTransactionTypeLabel(type: Transaction["type"]) {
+  return type === "income" ? "Pemasukan" : "Pengeluaran";
+}
+
+function getTransactionMemo(transaction: Transaction) {
+  return transaction.rawText || transaction.note;
+}
+
+function escapeCsvCell(value: string | number) {
+  const stringValue = String(value);
+
+  if (/[",\r\n]/.test(stringValue)) {
+    return `"${stringValue.replaceAll('"', '""')}"`;
+  }
+
+  return stringValue;
+}
+
+function downloadBlob(content: BlobPart, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function parseAmount(rawText: string) {
@@ -948,6 +1001,180 @@ export default function Home() {
       tone: "text-rose-300",
     },
   ];
+
+  function exportCsvReport() {
+    const rows = [...filteredTransactions]
+      .sort(compareTransactionsByRecency)
+      .map((transaction) => [
+        transaction.date,
+        getTransactionTypeLabel(transaction.type),
+        transaction.category,
+        transaction.amount,
+        getSpaceLabel(transaction.space),
+        getTransactionMemo(transaction),
+      ]);
+    const csv = [
+      ["tanggal", "tipe", "kategori", "nominal", "ruang", "catatan/rawText"],
+      ...rows,
+    ]
+      .map((row) => row.map(escapeCsvCell).join(","))
+      .join("\r\n");
+
+    downloadBlob(
+      csv,
+      `${getReportFileBase(periodFilter, spaceFilter)}.csv`,
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  async function exportPdfReport() {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({
+      format: "a4",
+      orientation: "landscape",
+      unit: "mm",
+    });
+    const transactionsForReport = [...filteredTransactions].sort(
+      compareTransactionsByRecency,
+    );
+    const marginX = 14;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const periodText = getPeriodLabel(periodFilter);
+    const spaceText = getSpaceFilterLabel(spaceFilter);
+    const columns = [
+      { key: "date", label: "Tanggal", width: 31 },
+      { key: "type", label: "Tipe", width: 30 },
+      { key: "category", label: "Kategori", width: 42 },
+      { key: "amount", label: "Nominal", width: 32 },
+      { key: "space", label: "Ruang", width: 28 },
+      { key: "memo", label: "Catatan/rawText", width: 106 },
+    ] as const;
+
+    function drawHeader() {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, pageHeight, "F");
+      doc.setTextColor(17, 24, 39);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Laporan Keuangan CatatKeu", marginX, 18);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(82, 82, 91);
+      doc.text(`Dibuat: ${formatDateTime(new Date())}`, marginX, 25);
+    }
+
+    function drawTableHeader(y: number) {
+      let x = marginX;
+      doc.setFillColor(244, 244, 245);
+      doc.setDrawColor(212, 212, 216);
+      doc.setTextColor(39, 39, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+
+      columns.forEach((column) => {
+        doc.rect(x, y, column.width, 8, "FD");
+        doc.text(column.label, x + 2, y + 5.2);
+        x += column.width;
+      });
+
+      return y + 8;
+    }
+
+    function splitCellText(value: string, width: number) {
+      const lines = doc.splitTextToSize(value || "-", width - 4) as string[];
+
+      if (lines.length <= 3) {
+        return lines;
+      }
+
+      return [...lines.slice(0, 2), `${lines[2]}...`];
+    }
+
+    drawHeader();
+
+    doc.setDrawColor(228, 228, 231);
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(marginX, 33, pageWidth - marginX * 2, 24, 2, 2, "FD");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(82, 82, 91);
+    doc.text(`Periode: ${periodText}`, marginX + 5, 41);
+    doc.text(`Ruang catatan: ${spaceText}`, marginX + 5, 49);
+
+    [
+      ["Saldo", totals.balance],
+      ["Pemasukan", totals.income],
+      ["Pengeluaran", totals.expense],
+    ].forEach(([label, value], index) => {
+      const x = marginX + 92 + index * 53;
+      doc.setTextColor(82, 82, 91);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(String(label), x, 41);
+      doc.setTextColor(17, 24, 39);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(formatCurrency(Number(value)), x, 49);
+    });
+
+    let y = 68;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    doc.text("Transaksi", marginX, y);
+    y += 5;
+    y = drawTableHeader(y);
+
+    if (transactionsForReport.length === 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(113, 113, 122);
+      doc.text("Tidak ada transaksi pada filter aktif.", marginX, y + 9);
+    }
+
+    transactionsForReport.forEach((transaction) => {
+      const values = {
+        amount: formatReportAmount(transaction.amount),
+        category: transaction.category,
+        date: formatDate(transaction.date),
+        memo: getTransactionMemo(transaction),
+        space: getSpaceLabel(transaction.space),
+        type: getTransactionTypeLabel(transaction.type),
+      };
+      const cellLines = columns.map((column) =>
+        splitCellText(values[column.key], column.width),
+      );
+      const rowHeight = Math.max(
+        9,
+        Math.max(...cellLines.map((lines) => lines.length)) * 4.2 + 4,
+      );
+
+      if (y + rowHeight > pageHeight - 14) {
+        doc.addPage();
+        drawHeader();
+        y = drawTableHeader(35);
+      }
+
+      let x = marginX;
+      doc.setDrawColor(228, 228, 231);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(39, 39, 42);
+
+      columns.forEach((column, index) => {
+        doc.rect(x, y, column.width, rowHeight);
+        cellLines[index].forEach((line, lineIndex) => {
+          doc.text(line, x + 2, y + 5 + lineIndex * 4.2);
+        });
+        x += column.width;
+      });
+
+      y += rowHeight;
+    });
+
+    doc.save(`${getReportFileBase(periodFilter, spaceFilter)}.pdf`);
+  }
 
   function commitTransactions(nextTransactions: Transaction[]) {
     const normalizedTransactions = nextTransactions.map((transaction) => ({
@@ -1610,14 +1837,32 @@ export default function Home() {
             {activePage === "analytics" ? (
               <>
                 <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-8 lg:p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Grafik</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
                     Arus uang
                   </h3>
                 </div>
-                <LineChartIcon className="text-cyan-200" size={20} />
+                <div className="flex items-center gap-2">
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                    onClick={exportCsvReport}
+                    type="button"
+                  >
+                    <Download size={15} />
+                    Export CSV
+                  </button>
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-cyan-200 px-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100"
+                    onClick={exportPdfReport}
+                    type="button"
+                  >
+                    <FileText size={15} />
+                    Export PDF
+                  </button>
+                  <LineChartIcon className="hidden text-cyan-200 sm:block" size={20} />
+                </div>
               </div>
               <div className="mt-5 h-72 rounded-lg border border-cyan-200/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_18rem),rgba(8,13,20,0.72)] p-4">
                 {chartData.length > 0 ? (
