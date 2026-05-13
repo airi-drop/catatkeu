@@ -1,8 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #07090d;
-  --foreground: #f4f4f5;
+  --background: #0a0f14;
+  --foreground: #f7fbff;
+  --card: rgba(16, 24, 34, 0.72);
+  --card-strong: rgba(20, 31, 44, 0.84);
+  --line: rgba(190, 242, 255, 0.13);
+  --field: rgba(8, 13, 20, 0.72);
+  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.28);
+  --shadow-card: 0 16px 38px rgba(0, 0, 0, 0.22);
 }
 
 @theme inline {
@@ -14,13 +20,84 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0a0f14;
+    --foreground: #f7fbff;
   }
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(45, 212, 191, 0.14), transparent 28rem),
+    radial-gradient(circle at 88% 8%, rgba(168, 85, 247, 0.14), transparent 26rem),
+    linear-gradient(135deg, #081018 0%, #0b111a 44%, #0c1218 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.28);
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.rounded-lg {
+  border-radius: 1.15rem;
+}
+
+.rounded-md {
+  border-radius: 0.8rem;
+}
+
+.border-white\/10 {
+  border-color: var(--line);
+}
+
+.bg-\[\#07090d\],
+.bg-\[\#0b0f16\]\/90 {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.1), transparent 30rem),
+    linear-gradient(135deg, rgba(8, 16, 24, 0.96), rgba(11, 17, 26, 0.94));
+}
+
+.bg-\[\#080b10\] {
+  background: rgba(10, 16, 24, 0.66);
+}
+
+.bg-\[\#0d1118\] {
+  background: var(--field);
+}
+
+.bg-white\/\[0\.03\],
+.bg-white\/\[0\.04\] {
+  background: var(--card);
+}
+
+section.rounded-lg.border,
+article.rounded-lg.border,
+aside .mt-auto.rounded-lg.border {
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(22px);
+}
+
+input,
+select,
+textarea {
+  color-scheme: dark;
 }

@@ -1063,8 +1063,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#07090d] text-zinc-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col lg:flex-row">
-        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b0f16]/90 px-5 py-6 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col lg:flex-row">
+        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b0f16]/90 px-5 py-7 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25">
               <Sparkles size={20} />
@@ -1078,9 +1078,9 @@ export default function Home() {
           <nav className="mt-10 space-y-1">
             {navItems.map((item) => (
               <button
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${
                   activePage === item.page
-                    ? "bg-white text-zinc-950"
+                    ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                     : "text-zinc-400 hover:bg-white/5 hover:text-white"
                 }`}
                 key={item.label}
@@ -1108,7 +1108,7 @@ export default function Home() {
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07090d]/85 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07090d]/85 px-4 py-4 backdrop-blur-xl sm:px-7 lg:px-10">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <button
@@ -1154,7 +1154,7 @@ export default function Home() {
                   <button
                     className={`flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-medium transition ${
                       activePage === item.page
-                        ? "bg-white text-zinc-950"
+                        ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                         : "border border-white/10 text-zinc-300 hover:bg-white/5"
                     }`}
                     key={item.label}
@@ -1172,8 +1172,8 @@ export default function Home() {
             ) : null}
           </header>
 
-          <div className="grid gap-4 px-4 py-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-12 lg:gap-5 lg:px-8">
-            <section className="grid gap-4 sm:col-span-2 sm:grid-cols-3 lg:col-span-12">
+          <div className="grid gap-5 px-4 py-6 sm:grid-cols-2 sm:px-7 lg:grid-cols-12 lg:gap-6 lg:px-10 lg:py-8">
+            <section className="grid gap-5 sm:col-span-2 sm:grid-cols-3 lg:col-span-12">
               <div className="grid gap-3 sm:col-span-3 lg:grid-cols-2">
                 <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                   <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
@@ -1184,7 +1184,7 @@ export default function Home() {
                       <button
                         className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
                           spaceFilter === option.value
-                            ? "bg-white text-zinc-950"
+                            ? "bg-teal-200 text-zinc-950 shadow-lg shadow-teal-950/20"
                             : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
                         }`}
                         key={option.value}
@@ -1212,7 +1212,7 @@ export default function Home() {
                       <button
                         className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
                           periodFilter === option.value
-                            ? "bg-cyan-300 text-zinc-950"
+                            ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                             : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
                         }`}
                         key={option.value}
@@ -1225,9 +1225,13 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              {summaryCards.map((card) => (
+              {summaryCards.map((card, index) => (
                 <article
-                  className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20"
+                  className={`rounded-lg border border-white/10 p-5 shadow-2xl shadow-black/20 ${
+                    index === 0
+                      ? "bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(168,85,247,0.13)_48%,rgba(15,23,42,0.86))] sm:col-span-3 lg:col-span-1"
+                      : "bg-white/[0.04]"
+                  }`}
                   key={card.label}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -1238,7 +1242,7 @@ export default function Home() {
                       </p>
                     </div>
                     <div
-                      className={`flex size-11 items-center justify-center rounded-lg bg-white/5 ${card.tone}`}
+                      className={`flex size-11 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10 ${card.tone}`}
                     >
                       <card.icon size={22} />
                     </div>
@@ -1249,7 +1253,7 @@ export default function Home() {
             </section>
 
             {activePage === "dashboard" ? (
-              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-7">
+              <section className="rounded-lg border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(18,30,43,0.88),rgba(11,18,27,0.82))] p-5 shadow-2xl shadow-cyan-950/20 sm:col-span-2 lg:col-span-7 lg:p-6">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm text-zinc-400">Input transaksi</p>
@@ -1257,14 +1261,14 @@ export default function Home() {
                     Catat cepat atau transaksi usaha
                   </h3>
                 </div>
-                <div className="flex size-10 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-200">
+                <div className="flex size-11 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100 ring-1 ring-cyan-200/20">
                   <Sparkles size={18} />
                 </div>
               </div>
 
               {activeInputSpace ? (
                 <div
-                  className={`mt-5 grid gap-2 rounded-lg border border-white/10 bg-[#080b10] p-1 ${
+                  className={`mt-6 grid gap-2 rounded-lg border border-white/10 bg-[#080b10] p-1.5 ${
                     activeInputSpace === "business"
                       ? "grid-cols-2"
                       : "grid-cols-1"
@@ -1310,7 +1314,7 @@ export default function Home() {
                   </p>
                 </div>
               ) : activeInputMode === "quick" ? (
-                <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-3">
+                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/20">
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm font-medium text-zinc-300">
                       Catat Cepat
@@ -1332,7 +1336,7 @@ export default function Home() {
                     </label>
                   </div>
                   <textarea
-                    className="min-h-32 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
+                    className="min-h-36 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
                     onChange={(event) => {
                       setRawText(event.target.value);
                       setQuickFeedback("");
@@ -1346,7 +1350,7 @@ export default function Home() {
                         `Disimpan ke ruang ${getSpaceLabel(activeInputSpace)}.`}
                     </p>
                     <button
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/25 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={
                         !hasValidSelectedDate ||
                         !rawText.trim() ||
@@ -1361,7 +1365,7 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-4 rounded-lg border border-white/10 bg-[#080b10] p-4">
+                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/20">
                   <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
                     <div>
                       <label
@@ -1589,7 +1593,7 @@ export default function Home() {
                         : "Disimpan sebagai pengeluaran kategori Bahan/Modal."}
                     </p>
                     <button
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/25 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={!hasValidSelectedDate || !canSubmitBusiness}
                       onClick={addBusinessTransaction}
                       type="button"
@@ -1605,7 +1609,7 @@ export default function Home() {
 
             {activePage === "analytics" ? (
               <>
-                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-8">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-8 lg:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Grafik</p>
@@ -1613,9 +1617,9 @@ export default function Home() {
                     Arus uang
                   </h3>
                 </div>
-                <LineChartIcon className="text-zinc-500" size={20} />
+                <LineChartIcon className="text-cyan-200" size={20} />
               </div>
-              <div className="mt-5 h-64 rounded-lg border border-white/10 bg-[#080b10] p-3">
+              <div className="mt-5 h-72 rounded-lg border border-cyan-200/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_18rem),rgba(8,13,20,0.72)] p-4">
                 {chartData.length > 0 ? (
                   <MoneyFlowChart data={chartData} />
                 ) : (
@@ -1631,7 +1635,7 @@ export default function Home() {
               </div>
             </section>
 
-                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-4 lg:p-6">
               <p className="text-sm text-zinc-400">Ringkasan periode</p>
               <h3 className="mt-1 text-lg font-semibold text-white">
                 {periodLabel}
@@ -1658,7 +1662,7 @@ export default function Home() {
                   },
                 ].map((item) => (
                   <div
-                    className="flex items-center justify-between gap-4 rounded-lg bg-[#080b10] px-3 py-3"
+                    className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
                     key={item.label}
                   >
                     <p className="text-sm text-zinc-400">{item.label}</p>
@@ -1670,14 +1674,14 @@ export default function Home() {
               </div>
                 </section>
 
-                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-4 lg:p-6">
               <p className="text-sm text-zinc-400">Kategori pengeluaran</p>
               <h3 className="mt-1 text-lg font-semibold text-white">Top 3</h3>
               <div className="mt-5 space-y-3">
                 {topExpenseCategories.length > 0 ? (
                   topExpenseCategories.map((item, index) => (
                     <div
-                      className="flex items-center justify-between gap-4 rounded-lg bg-[#080b10] px-3 py-3"
+                      className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
                       key={item.category}
                     >
                       <p className="min-w-0 truncate text-sm font-medium text-white">
@@ -1698,7 +1702,7 @@ export default function Home() {
               </div>
                 </section>
 
-                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-8">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-8 lg:p-6">
                   <p className="text-sm text-zinc-400">Khusus Usaha</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
                     Ringkasan usaha
@@ -1738,7 +1742,7 @@ export default function Home() {
                       },
                     ].map((item) => (
                       <div
-                        className="rounded-lg bg-[#080b10] px-3 py-4"
+                        className="rounded-lg border border-white/10 bg-[#080b10] px-4 py-4"
                         key={item.label}
                       >
                         <p className="text-sm text-zinc-400">{item.label}</p>
@@ -1754,7 +1758,7 @@ export default function Home() {
                   </p>
                 </section>
 
-                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-4">
+                <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-4 lg:p-6">
               <p className="text-sm text-zinc-400">Statistik</p>
               <h3 className="mt-1 text-lg font-semibold text-white">
                 Transaksi
@@ -1766,7 +1770,7 @@ export default function Home() {
                   { label: "Keluar", value: transactionStats.expense },
                 ].map((item) => (
                   <div
-                    className="rounded-lg bg-[#080b10] px-2 py-4 text-center"
+                    className="rounded-lg border border-white/10 bg-[#080b10] px-2 py-5 text-center"
                     key={item.label}
                   >
                     <p className="text-2xl font-semibold text-white">
@@ -1784,7 +1788,7 @@ export default function Home() {
             ) : null}
 
             {activePage === "dashboard" ? (
-              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 sm:col-span-2 lg:col-span-12">
+              <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-12 lg:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Riwayat</p>
@@ -1793,7 +1797,7 @@ export default function Home() {
                   </h3>
                 </div>
                 <button
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-cyan-200/20 bg-cyan-300/10 px-4 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={!activeInputSpace}
                   onClick={() =>
                     addTransaction("Penjualan nasi 350 ribu hari ini")
@@ -1805,7 +1809,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+              <div className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
                 <label className="block">
                   <span className="text-xs font-medium text-zinc-500">
                     Search transaksi
@@ -1883,12 +1887,12 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className="mt-5 min-h-52 rounded-lg border border-dashed border-white/10 bg-[#080b10]">
+              <div className="mt-5 min-h-52 rounded-lg border border-white/10 bg-[#080b10]">
                 {sortedTransactions.length > 0 ? (
                   <div className="divide-y divide-white/10">
                     {sortedTransactions.map((transaction) => (
                       <article
-                        className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-4 px-4 py-4 transition hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between"
                         key={transaction.id}
                       >
                         <div className="min-w-0">
@@ -1897,7 +1901,7 @@ export default function Home() {
                               {transaction.note}
                             </p>
                             <span
-                              className={`rounded-md px-2 py-1 text-xs font-medium ${
+                              className={`rounded-md px-2.5 py-1 text-xs font-medium ${
                                 transaction.type === "income"
                                   ? "bg-emerald-400/10 text-emerald-200"
                                   : "bg-rose-400/10 text-rose-200"
@@ -1907,7 +1911,7 @@ export default function Home() {
                                 ? "Pemasukan"
                                 : "Pengeluaran"}
                             </span>
-                            <span className="rounded-md bg-white/5 px-2 py-1 text-xs font-medium text-zinc-300">
+                            <span className="rounded-md bg-white/5 px-2.5 py-1 text-xs font-medium text-zinc-300">
                               {getSpaceLabel(transaction.space)}
                             </span>
                           </div>

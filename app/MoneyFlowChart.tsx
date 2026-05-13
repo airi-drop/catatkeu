@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -40,47 +41,66 @@ function formatCompactCurrency(amount: number) {
 export default function MoneyFlowChart({ data }: MoneyFlowChartProps) {
   return (
     <ResponsiveContainer height="100%" minHeight={0} minWidth={0} width="100%">
-      <BarChart data={data} margin={{ bottom: 0, left: -18, right: 4, top: 8 }}>
-        <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+      <BarChart data={data} margin={{ bottom: 0, left: -12, right: 8, top: 12 }}>
+        <defs>
+          <linearGradient id="incomeGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#67e8f9" />
+            <stop offset="100%" stopColor="#6ee7b7" />
+          </linearGradient>
+          <linearGradient id="expenseGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#c4b5fd" />
+            <stop offset="100%" stopColor="#f0abfc" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="rgba(190,242,255,0.09)" vertical={false} />
         <XAxis
           axisLine={false}
           dataKey="label"
-          tick={{ fill: "#a1a1aa", fontSize: 11 }}
+          tick={{ fill: "#b8c4d4", fontSize: 11 }}
           tickLine={false}
         />
         <YAxis
           axisLine={false}
-          tick={{ fill: "#a1a1aa", fontSize: 11 }}
+          tick={{ fill: "#b8c4d4", fontSize: 11 }}
           tickFormatter={(value) => formatCompactCurrency(Number(value))}
           tickLine={false}
         />
         <Tooltip
           contentStyle={{
-            background: "#0d1118",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: 8,
+            background: "rgba(12,18,28,0.94)",
+            border: "1px solid rgba(190,242,255,0.16)",
+            borderRadius: 16,
+            boxShadow: "0 18px 44px rgba(0,0,0,0.28)",
             color: "#f4f4f5",
           }}
-          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+          cursor={{ fill: "rgba(34,211,238,0.06)", radius: 12 }}
           formatter={(value) => formatCurrency(Number(value))}
-          labelStyle={{ color: "#d4d4d8" }}
+          labelStyle={{ color: "#e2f6ff" }}
         />
         <Legend
           iconType="circle"
-          wrapperStyle={{ color: "#a1a1aa", fontSize: 12 }}
+          wrapperStyle={{ color: "#b8c4d4", fontSize: 12, paddingTop: 8 }}
         />
         <Bar
           dataKey="income"
-          fill="#6ee7b7"
+          fill="url(#incomeGradient)"
           name="Pemasukan"
-          radius={[4, 4, 0, 0]}
-        />
+          radius={[10, 10, 4, 4]}
+        >
+          {data.map((entry) => (
+            <Cell key={`income-${entry.date}`} />
+          ))}
+        </Bar>
         <Bar
           dataKey="expense"
-          fill="#fda4af"
+          fill="url(#expenseGradient)"
           name="Pengeluaran"
-          radius={[4, 4, 0, 0]}
-        />
+          radius={[10, 10, 4, 4]}
+        >
+          {data.map((entry) => (
+            <Cell key={`expense-${entry.date}`} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
