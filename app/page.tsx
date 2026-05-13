@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { hasSupabaseConfig, supabase } from "@/lib/supabaseClient";
 import {
@@ -16,6 +16,7 @@ import {
   FileText,
   HomeIcon,
   LineChart as LineChartIcon,
+  LoaderCircle,
   Lock,
   LogOut,
   Mail,
@@ -1257,6 +1258,7 @@ export default function Home() {
   const [transactionError, setTransactionError] = useState("");
   const [rawText, setRawText] = useState("");
   const [quickFeedback, setQuickFeedback] = useState("");
+  const quickInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today");
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
@@ -1924,6 +1926,10 @@ export default function Home() {
   }
 
   async function addTransaction(inputText = rawText) {
+    if (isSavingTransaction) {
+      return;
+    }
+
     const trimmedText = inputText.trim();
 
     if (!trimmedText) {
@@ -1942,6 +1948,7 @@ export default function Home() {
 
     setIsSavingTransaction(true);
     setTransactionError("");
+    setQuickFeedback("AI sedang membaca transaksi...");
 
     let nextTransactions: Transaction[] = [];
 
@@ -1953,6 +1960,7 @@ export default function Home() {
       );
     } catch (error) {
       console.warn("AI parser gagal, memakai parser manual.", error);
+      setQuickFeedback("AI parser gagal, mencoba parser standar...");
       nextTransactions = createQuickTransactions(
         trimmedText,
         activeInputSpace,
@@ -2477,13 +2485,12 @@ export default function Home() {
                     <p className="text-sm font-medium text-zinc-300">
                       Catat Cepat
                     </p>
-                    <label
-                      className="flex min-w-0 items-center gap-2 text-sm text-zinc-400"
-                      htmlFor="quick-date"
-                    >
+                    <div className="flex min-w-0 items-center gap-2 text-sm text-zinc-400">
                       <CalendarDays size={16} />
                       <input
-                        className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-40"
+                        aria-label="Tanggal catat cepat"
+                        className="h-11 w-full cursor-text rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-60 sm:w-40"
+                        disabled={isSavingTransaction}
                         id="quick-date"
                         onChange={(event) =>
                           setSelectedDate(event.target.value)
@@ -2491,19 +2498,35 @@ export default function Home() {
                         type="date"
                         value={selectedDate}
                       />
-                    </label>
+                    </div>
                   </div>
-                  <textarea
-                    className="min-h-44 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600 sm:min-h-40"
-                    onChange={(event) => {
-                      setRawText(event.target.value);
-                      setQuickFeedback("");
-                    }}
-                    placeholder="Tulis transaksi seperti kamu mencatat di chat..."
-                    value={rawText}
-                  />
+                  <div
+                    className="cursor-text rounded-lg border border-white/10 bg-[#0d1118] p-3 transition focus-within:border-cyan-300/70 focus-within:ring-2 focus-within:ring-cyan-300/10"
+                    onClick={() => quickInputRef.current?.focus()}
+                  >
+                    <textarea
+                      className="min-h-48 w-full cursor-text resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-44"
+                      disabled={isSavingTransaction}
+                      onChange={(event) => {
+                        setRawText(event.target.value);
+                        setQuickFeedback("");
+                      }}
+                      placeholder="Tulis transaksi seperti kamu mencatat di chat..."
+                      ref={quickInputRef}
+                      value={rawText}
+                    />
+                  </div>
                   <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-zinc-500">
+                    <p
+                      aria-live="polite"
+                      className={`text-sm ${
+                        isSavingTransaction
+                          ? "text-cyan-100"
+                          : quickFeedback
+                            ? "text-emerald-200"
+                            : "text-zinc-500"
+                      }`}
+                    >
                       {quickFeedback ||
                         `Disimpan ke ruang ${getSpaceLabel(activeInputSpace)}.`}
                     </p>
@@ -2518,8 +2541,12 @@ export default function Home() {
                       onClick={() => addTransaction()}
                       type="button"
                     >
-                      <Send size={16} />
-                      Tambah transaksi
+                      {isSavingTransaction ? (
+                        <LoaderCircle className="animate-spin" size={16} />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                      {isSavingTransaction ? "Memproses..." : "Tambah transaksi"}
                     </button>
                   </div>
                 </div>
