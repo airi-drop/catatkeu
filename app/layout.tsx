@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Money Journal",
-  description: "Dashboard jurnal keuangan berbasis AI.",
+  title: "CatatKeu",
+  description: "Catatan keuangan sederhana untuk pribadi dan UMKM mikro.",
 };
 
 export default function RootLayout({
