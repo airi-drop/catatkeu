@@ -33,6 +33,7 @@ import {
 export type Transaction = {
   id: string;
   date: string;
+  created_at?: string;
   type: "income" | "expense";
   space: TransactionSpace;
   category: string;
@@ -531,28 +532,48 @@ function isInPeriod(
   return date >= range.start && date <= range.end;
 }
 
-function getTransactionCreatedKey(transaction: Transaction) {
-  return Number(transaction.id.split("-")[0]) || 0;
+function getTransactionTimestamp(transaction: Transaction) {
+  if (transaction.created_at) {
+    const createdAtTime = Date.parse(transaction.created_at);
+
+    if (Number.isFinite(createdAtTime)) {
+      return createdAtTime;
+    }
+  }
+
+  const idTime = Number(transaction.id.split("-")[0]);
+
+  if (Number.isFinite(idTime) && idTime > 0) {
+    return idTime;
+  }
+
+  const dateTime = Date.parse(transaction.date);
+
+  return Number.isFinite(dateTime) ? dateTime : 0;
 }
 
 function compareTransactionsByRecency(
   first: Transaction,
   second: Transaction,
 ) {
+  const createdComparison =
+    getTransactionTimestamp(second) - getTransactionTimestamp(first);
+
+  if (createdComparison !== 0) {
+    return createdComparison;
+  }
+
   const dateComparison = second.date.localeCompare(first.date);
 
   if (dateComparison !== 0) {
     return dateComparison;
   }
 
-  const createdComparison =
-    getTransactionCreatedKey(second) - getTransactionCreatedKey(first);
-
-  if (createdComparison !== 0) {
-    return createdComparison;
-  }
-
   return second.id.localeCompare(first.id);
+}
+
+function sortTransactionsByRecency(transactions: Transaction[]) {
+  return [...transactions].sort(compareTransactionsByRecency);
 }
 
 function getReportFileBase(period: PeriodFilter, space: SpaceFilter) {
@@ -599,6 +620,7 @@ const moneyUnitMultipliers: Record<string, number> = {
 };
 
 const quantityUnits = new Set([
+  "gelas",
   "pcs",
   "kg",
   "gram",
@@ -609,7 +631,7 @@ const quantityUnits = new Set([
 ]);
 
 const transactionActionPattern =
-  /\b(?:transfer\s+masuk|ambil\s+pribadi|penjualan|jual|beli|bayar|gaji|bonus|modal)\b/gi;
+  /\b(?:transfer\s+masuk|tambahan\s+modal|modal\s+tambahan|tambah\s+modal|setoran\s+modal|top\s*up\s+modal|topup\s+modal|modal\s+masuk|masuk\s+uang|gaji\s+karyawan|ambil\s+pribadi|pengeluaran|pemasukan|operasional|penjualan|listrik|sewa|biaya|jual|beli|bayar|gaji|bonus|modal)\b/gi;
 
 function parseAmountValue(value: string) {
   const parsed = Number(value.replace(",", "."));
@@ -620,6 +642,18 @@ function parseAmountValue(value: string) {
 function parseAmount(rawText: string) {
   const normalized = rawText.toLowerCase();
   const moneyPattern = /(\d+(?:[,.]\d+)?)\s*(rb|ribu|jt|juta|k|m)\b/g;
+  const quantityPricePattern =
+    /(\d+(?:[,.]\d+)?)\s*(gelas|pcs|porsi)\b\s*(?:x|@|harga|per)?\s*(\d+(?:[,.]\d+)?)\s*(rb|ribu|jt|juta|k|m)\b/;
+  const quantityPriceMatch = normalized.match(quantityPricePattern);
+
+  if (quantityPriceMatch) {
+    const quantity = parseAmountValue(quantityPriceMatch[1]);
+    const unitPrice = parseAmountValue(quantityPriceMatch[3]);
+    const multiplier = moneyUnitMultipliers[quantityPriceMatch[4]] ?? 1;
+
+    return Math.round(quantity * unitPrice * multiplier);
+  }
+
   const moneyMatches = Array.from(normalized.matchAll(moneyPattern));
 
   if (moneyMatches.length > 0) {
@@ -653,16 +687,52 @@ function parseAmount(rawText: string) {
   return Math.round(parseAmountValue(amountMatch[0]));
 }
 
+function isCapitalInjection(rawText: string) {
+  return /\b(?:tambahan\s+modal|modal\s+tambahan|tambah\s+modal|modal\s+masuk|setoran\s+modal|top\s*up\s+modal|topup\s+modal)\b/i.test(
+    rawText,
+  );
+}
+
 function inferType(rawText: string): Transaction["type"] {
   const normalized = rawText.toLowerCase();
+  const incomeKeywords = [
+    "transfer masuk",
+    "tambahan modal",
+    "topup modal",
+    "modal masuk",
+    "masuk uang",
+    "penjualan",
+    "pemasukan",
+    "jual",
+    "terjual",
+    "laku",
+    "omzet",
+    "omset",
+    "bayar piutang",
+    "piutang dibayar",
+    "bonus",
+    "terima",
+    "refund",
+  ];
+
+  if (isCapitalInjection(normalized)) {
+    return "income";
+  }
+
+  if (incomeKeywords.some((keyword) => normalized.includes(keyword))) {
+    return "income";
+  }
+
   const expenseKeywords = [
     "bayar utang",
     "bayar hutang",
+    "gaji karyawan",
     "bayar gaji",
+    "pengeluaran",
     "beli",
     "kulakan",
-    "modal",
     "bahan",
+    "biaya",
     "operasional",
     "sewa",
     "listrik",
@@ -679,29 +749,15 @@ function inferType(rawText: string): Transaction["type"] {
     return "expense";
   }
 
-  const incomeKeywords = [
-    "penjualan",
-    "jual",
-    "terjual",
-    "laku",
-    "omzet",
-    "omset",
-    "bayar piutang",
-    "piutang dibayar",
-    "gaji",
-    "bonus",
-    "masuk",
-    "terima",
-    "refund",
-  ];
-
-  return incomeKeywords.some((keyword) => normalized.includes(keyword))
-    ? "income"
-    : "expense";
+  return "expense";
 }
 
 function inferCategory(rawText: string, type: Transaction["type"]) {
   const normalized = rawText.toLowerCase();
+
+  if (isCapitalInjection(normalized)) {
+    return "Modal";
+  }
 
   if (
     ["penjualan", "jual", "terjual", "laku", "omzet", "omset"].some(
@@ -714,15 +770,20 @@ function inferCategory(rawText: string, type: Transaction["type"]) {
   if (
     [
       "bahan",
-      "modal",
       "kulakan",
       "stok",
       "barang dagangan",
       "supplier",
+      "minyak",
       "tepung",
+      "gas",
     ].some((keyword) => normalized.includes(keyword))
   ) {
     return "Bahan/Modal";
+  }
+
+  if (type === "income" && normalized.includes("modal")) {
+    return "Modal";
   }
 
   if (
@@ -789,6 +850,24 @@ function inferCategory(rawText: string, type: Transaction["type"]) {
   return "Lainnya";
 }
 
+function inferPaymentMethod(rawText: string): PaymentMethod | null {
+  const normalized = rawText.toLowerCase();
+
+  if (normalized.includes("qris")) {
+    return "qris";
+  }
+
+  if (normalized.includes("transfer")) {
+    return "transfer";
+  }
+
+  if (normalized.includes("cash")) {
+    return "cash";
+  }
+
+  return null;
+}
+
 function createTransaction(
   rawText: string,
   space: TransactionSpace = "business",
@@ -802,12 +881,14 @@ function createTransaction(
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
     date: dateKey,
+    created_at: new Date().toISOString(),
     type,
     space,
     category: inferCategory(trimmedText, type),
     amount,
     note: trimmedText,
     rawText: trimmedText,
+    paymentMethod: inferPaymentMethod(trimmedText),
   };
 }
 
@@ -860,6 +941,99 @@ function createQuickTransactions(
     .filter((transaction) => transaction.amount > 0);
 }
 
+function isPaymentMethod(value: unknown): value is PaymentMethod {
+  return value === "cash" || value === "qris" || value === "transfer";
+}
+
+function normalizeApiTransaction(
+  value: unknown,
+  space: TransactionSpace,
+  date: string,
+): Transaction | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const transaction = value as Partial<Transaction>;
+  const amount =
+    typeof transaction.amount === "number"
+      ? Math.round(transaction.amount)
+      : Number.NaN;
+  const type =
+    transaction.type === "income" || transaction.type === "expense"
+      ? transaction.type
+      : null;
+  const rawText =
+    typeof transaction.rawText === "string" ? transaction.rawText.trim() : "";
+  const note =
+    typeof transaction.note === "string" && transaction.note.trim()
+      ? transaction.note.trim()
+      : rawText;
+  const category =
+    typeof transaction.category === "string" && transaction.category.trim()
+      ? transaction.category.trim()
+      : type === "income"
+        ? "Penjualan"
+        : "Lainnya";
+
+  if (!type || !Number.isFinite(amount) || amount <= 0 || !rawText) {
+    return null;
+  }
+
+  return {
+    id:
+      typeof transaction.id === "string" && transaction.id
+        ? transaction.id
+        : `${Date.now()}-${crypto.randomUUID()}`,
+    date: normalizeDateKey(transaction.date ?? date) ?? date,
+    created_at:
+      typeof transaction.created_at === "string"
+        ? transaction.created_at
+        : new Date().toISOString(),
+    type,
+    space,
+    category,
+    amount,
+    note,
+    rawText,
+    paymentMethod: isPaymentMethod(transaction.paymentMethod)
+      ? transaction.paymentMethod
+      : null,
+  };
+}
+
+async function createAiQuickTransactions(
+  rawText: string,
+  space: TransactionSpace,
+  date: string,
+) {
+  const response = await fetch("/api/parse-transaction", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      date,
+      space,
+      text: rawText,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("AI parser gagal.");
+  }
+
+  const parsed: unknown = await response.json();
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Format hasil AI tidak valid.");
+  }
+
+  return parsed
+    .map((transaction) => normalizeApiTransaction(transaction, space, date))
+    .filter((transaction): transaction is Transaction => Boolean(transaction));
+}
+
 function parsePositiveNumber(value: string) {
   const normalized = value.replace(",", ".");
   const parsed = Number(normalized);
@@ -894,6 +1068,7 @@ function createBusinessTransaction(
     return {
       id: `${Date.now()}-${crypto.randomUUID()}`,
       date: dateKey,
+      created_at: new Date().toISOString(),
       type: "income",
       space: "business",
       category: "Penjualan",
@@ -918,6 +1093,7 @@ function createBusinessTransaction(
   return {
     id: `${Date.now()}-${crypto.randomUUID()}`,
     date: dateKey,
+    created_at: new Date().toISOString(),
     type: "expense",
     space: "business",
     category: "Bahan/Modal",
@@ -934,7 +1110,7 @@ function normalizeTransaction(value: unknown): Transaction | null {
   }
 
   const transaction = value as Record<string, unknown>;
-  const { amount, category, id, note, rawText, type } = transaction;
+  const { amount, category, created_at, id, note, rawText, type } = transaction;
 
   const isBaseTransaction =
     typeof id === "string" &&
@@ -966,6 +1142,7 @@ function normalizeTransaction(value: unknown): Transaction | null {
   return {
     id,
     date,
+    created_at: typeof created_at === "string" ? created_at : undefined,
     type,
     space,
     category,
@@ -980,6 +1157,7 @@ function normalizeTransactionRow(row: TransactionRow): Transaction | null {
   return normalizeTransaction({
     id: String(row.id),
     date: row.date,
+    created_at: row.created_at,
     type: row.type,
     space: row.space,
     category: row.category,
@@ -1006,8 +1184,9 @@ function toTransactionPayload(transaction: Transaction, userId: string) {
 
 function parseTransactions(stored: string | null) {
   if (!stored) {
-    console.log("parsedTransactions", dummyTransactions);
-    return dummyTransactions;
+    const sortedDummyTransactions = sortTransactionsByRecency(dummyTransactions);
+    console.log("parsedTransactions", sortedDummyTransactions);
+    return sortedDummyTransactions;
   }
 
   if (stored === cachedStorageValue) {
@@ -1020,15 +1199,19 @@ function parseTransactions(stored: string | null) {
   try {
     const parsed: unknown = JSON.parse(stored);
     if (!Array.isArray(parsed)) {
-      cachedTransactions = dummyTransactions;
+      cachedTransactions = sortTransactionsByRecency(dummyTransactions);
       return cachedTransactions;
     }
 
-    cachedTransactions = parsed
-      .map(normalizeTransaction)
-      .filter((transaction): transaction is Transaction => Boolean(transaction));
+    cachedTransactions = sortTransactionsByRecency(
+      parsed
+        .map(normalizeTransaction)
+        .filter((transaction): transaction is Transaction =>
+          Boolean(transaction),
+        ),
+    );
   } catch {
-    cachedTransactions = dummyTransactions;
+    cachedTransactions = sortTransactionsByRecency(dummyTransactions);
   }
 
   console.log("parsedTransactions", cachedTransactions);
@@ -1167,18 +1350,21 @@ export default function Home() {
           .from("transactions")
           .select("*")
           .eq("user_id", userId)
+          .order("created_at", { ascending: false })
           .order("date", { ascending: false })
-          .order("created_at", { ascending: false });
+          .order("id", { ascending: false });
 
         if (error) {
           throw error;
         }
 
-        const loadedTransactions = ((data ?? []) as TransactionRow[])
-          .map(normalizeTransactionRow)
-          .filter((transaction): transaction is Transaction =>
-            Boolean(transaction),
-          );
+        const loadedTransactions = sortTransactionsByRecency(
+          ((data ?? []) as TransactionRow[])
+            .map(normalizeTransactionRow)
+            .filter((transaction): transaction is Transaction =>
+              Boolean(transaction),
+            ),
+        );
 
         if (isMounted) {
           setTransactions(loadedTransactions);
@@ -1647,10 +1833,12 @@ export default function Home() {
   }
 
   function commitTransactions(nextTransactions: Transaction[]) {
-    const normalizedTransactions = nextTransactions.map((transaction) => ({
-      ...transaction,
-      date: normalizeDateKey(transaction.date) ?? getTodayDateKey(),
-    }));
+    const normalizedTransactions = sortTransactionsByRecency(
+      nextTransactions.map((transaction) => ({
+        ...transaction,
+        date: normalizeDateKey(transaction.date) ?? getTodayDateKey(),
+      })),
+    );
 
     setTransactions(normalizedTransactions);
     writeTransactions(normalizedTransactions);
@@ -1752,21 +1940,34 @@ export default function Home() {
       return;
     }
 
-    const nextTransactions = createQuickTransactions(
-      trimmedText,
-      activeInputSpace,
-      selectedDate,
-    );
+    setIsSavingTransaction(true);
+    setTransactionError("");
+
+    let nextTransactions: Transaction[] = [];
+
+    try {
+      nextTransactions = await createAiQuickTransactions(
+        trimmedText,
+        activeInputSpace,
+        selectedDate,
+      );
+    } catch (error) {
+      console.warn("AI parser gagal, memakai parser manual.", error);
+      nextTransactions = createQuickTransactions(
+        trimmedText,
+        activeInputSpace,
+        selectedDate,
+      );
+    }
 
     if (nextTransactions.length <= 0) {
       setQuickFeedback("");
+      setIsSavingTransaction(false);
       return;
     }
 
     const updatedTransactions = [...nextTransactions, ...transactions];
     console.log("newTransactions", nextTransactions);
-    setIsSavingTransaction(true);
-    setTransactionError("");
 
     try {
       const savedTransactions = await insertTransactionsToSupabase(
@@ -2312,8 +2513,7 @@ export default function Home() {
                         isSavingTransaction ||
                         isTransactionsLoading ||
                         !hasValidSelectedDate ||
-                        !rawText.trim() ||
-                        quickTransactions.length <= 0
+                        !rawText.trim()
                       }
                       onClick={() => addTransaction()}
                       type="button"
