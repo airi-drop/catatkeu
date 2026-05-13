@@ -17,7 +17,6 @@ import {
   Menu,
   Package,
   Pencil,
-  Plus,
   Search,
   Send,
   ShoppingCart,
@@ -1455,26 +1454,28 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#07090d] text-zinc-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col lg:flex-row">
-        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b0f16]/90 px-5 py-7 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+    <main className="min-h-screen overflow-x-hidden bg-[#07090d] text-zinc-100">
+      <div className="min-h-screen w-full">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-white/10 bg-[#0b0f16]/90 px-5 py-7 xl:flex xl:flex-col 2xl:w-72">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25">
+            <div className="flex size-11 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/20">
               <Sparkles size={20} />
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-400">CatatKeu</p>
-              <h1 className="text-lg font-semibold text-white">Harian</h1>
+              <h1 className="text-lg font-semibold text-white">CatatKeu</h1>
+              <p className="mt-0.5 text-xs leading-5 text-zinc-400">
+                Catatan uang simpel untuk pribadi & UMKM
+              </p>
             </div>
           </div>
 
-          <nav className="mt-10 space-y-1">
+          <nav className="mt-9 space-y-1.5">
             {navItems.map((item) => (
               <button
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${
+                className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition ${
                   activePage === item.page
-                    ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
-                    : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                    ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/15"
+                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-white"
                 }`}
                 key={item.label}
                 onClick={() => {
@@ -1493,20 +1494,20 @@ export default function Home() {
             <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-200">
               <Bot size={18} />
             </div>
-            <p className="text-sm font-medium text-white">Catatan sederhana</p>
+            <p className="text-sm font-medium text-white">Ruang uang harian</p>
             <p className="mt-1 text-sm leading-6 text-zinc-400">
-              Cocok untuk uang pribadi dan usaha mikro.
+              Ringkas untuk mengecek pemasukan, pengeluaran, dan arus kas.
             </p>
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07090d]/85 px-4 py-4 backdrop-blur-xl sm:px-7 lg:px-10">
+        <section className="flex min-w-0 flex-col xl:pl-64 2xl:pl-72">
+          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07090d]/88 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8 2xl:px-10">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <button
                   aria-label="Buka menu"
-                  className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-zinc-300 lg:hidden"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-300 xl:hidden"
                   onClick={() => setIsMobileNavOpen((current) => !current)}
                   type="button"
                 >
@@ -1516,13 +1517,16 @@ export default function Home() {
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-200">
                     CatatKeu
                   </p>
-                  <h2 className="text-xl font-semibold text-white sm:text-2xl">
+                  <h2 className="text-[clamp(1.05rem,3.8vw,1.5rem)] font-semibold leading-tight text-white">
                     {activePage === "dashboard"
                       ? "Ringkasan Uang Harian"
                       : activePage === "transactions"
                         ? "Pusat Transaksi"
                         : "Analitik Keuangan"}
                   </h2>
+                  <p className="mt-1 hidden text-sm text-zinc-400 sm:block">
+                    Catatan uang simpel untuk pribadi & UMKM
+                  </p>
                 </div>
               </div>
 
@@ -1544,10 +1548,10 @@ export default function Home() {
               </div>
             </div>
             {isMobileNavOpen ? (
-              <nav className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
+              <nav className="fixed inset-x-4 top-[84px] z-30 grid gap-2 rounded-lg border border-white/10 bg-[#0b0f16]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:left-auto sm:w-80 xl:hidden">
                 {navItems.map((item) => (
                   <button
-                    className={`flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-medium transition ${
+                    className={`flex h-12 items-center justify-start gap-3 rounded-lg px-3 text-sm font-medium transition ${
                       activePage === item.page
                         ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                         : "border border-white/10 text-zinc-300 hover:bg-white/5"
@@ -1567,17 +1571,17 @@ export default function Home() {
             ) : null}
           </header>
 
-          <div className="grid gap-5 px-4 py-6 sm:grid-cols-2 sm:px-7 lg:grid-cols-12 lg:gap-6 lg:px-10 lg:py-8">
-            <section className="grid gap-5 sm:col-span-2 sm:grid-cols-3 lg:col-span-12">
-              <div className="grid gap-3 sm:col-span-3 lg:grid-cols-2">
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="grid w-full gap-5 px-4 py-5 sm:grid-cols-2 sm:px-6 sm:py-6 lg:grid-cols-12 lg:gap-6 lg:px-8 lg:py-8 2xl:gap-7 2xl:px-10">
+            <section className="grid gap-4 sm:col-span-2 sm:grid-cols-2 lg:col-span-12 xl:grid-cols-3">
+              <div className="grid gap-3 sm:col-span-2 lg:grid-cols-2 xl:col-span-3">
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
                   <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
                     Ruang catatan
                   </p>
                   <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                     {spaceFilterOptions.map((option) => (
                       <button
-                        className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                        className={`h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition ${
                           spaceFilter === option.value
                             ? "bg-teal-200 text-zinc-950 shadow-lg shadow-teal-950/20"
                             : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
@@ -1599,14 +1603,14 @@ export default function Home() {
                   </div>
                 </div>
                 {activePage === "analytics" ? (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
                   <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
                     Periode
                   </p>
                   <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                     {periodFilterOptions.map((option) => (
                       <button
-                        className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                        className={`h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition ${
                           periodFilter === option.value
                             ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                             : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
@@ -1624,41 +1628,44 @@ export default function Home() {
               </div>
               {summaryCards.map((card, index) => (
                 <article
-                  className={`rounded-lg border border-white/10 p-5 shadow-2xl shadow-black/20 ${
+                  className={`min-w-0 rounded-lg border border-white/10 p-5 shadow-2xl shadow-black/15 sm:p-6 ${
                     index === 0
-                      ? "bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(168,85,247,0.13)_48%,rgba(15,23,42,0.86))] sm:col-span-3 lg:col-span-1"
+                      ? "bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(168,85,247,0.13)_48%,rgba(15,23,42,0.86))]"
                       : "bg-white/[0.04]"
                   }`}
                   key={card.label}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="text-sm text-zinc-400">{card.label}</p>
-                      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                      <p className="mt-3 break-words text-[clamp(1.35rem,3vw,1.85rem)] font-semibold leading-tight tracking-tight text-white">
                         {card.value}
                       </p>
                     </div>
                     <div
-                      className={`flex size-11 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10 ${card.tone}`}
+                      className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10 sm:size-11 ${card.tone}`}
                     >
                       <card.icon size={22} />
                     </div>
                   </div>
-                  <p className="mt-5 text-sm text-zinc-500">{card.helper}</p>
+                  <p className="mt-5 break-words text-sm text-zinc-500">{card.helper}</p>
                 </article>
               ))}
             </section>
 
             {activePage === "dashboard" ? (
-              <section className="rounded-lg border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(18,30,43,0.88),rgba(11,18,27,0.82))] p-5 shadow-2xl shadow-cyan-950/20 sm:col-span-2 lg:col-span-7 lg:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <section className="rounded-lg border border-cyan-200/15 bg-[linear-gradient(180deg,rgba(18,30,43,0.88),rgba(11,18,27,0.82))] p-5 shadow-2xl shadow-cyan-950/15 sm:col-span-2 lg:col-span-12 lg:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-sm text-zinc-400">Input transaksi</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
-                    Catat cepat atau transaksi usaha
+                    Mau catat apa hari ini?
                   </h3>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+                    Tulis pemasukan atau pengeluaran dengan bahasa sehari-hari.
+                  </p>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100 ring-1 ring-cyan-200/20">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100 ring-1 ring-cyan-200/20 sm:size-11">
                   <Sparkles size={18} />
                 </div>
               </div>
@@ -1667,7 +1674,7 @@ export default function Home() {
                 <div
                   className={`mt-6 grid gap-2 rounded-lg border border-white/10 bg-[#080b10] p-1.5 ${
                     activeInputSpace === "business"
-                      ? "grid-cols-2"
+                      ? "grid-cols-1 sm:grid-cols-2"
                       : "grid-cols-1"
                   }`}
                 >
@@ -1706,23 +1713,26 @@ export default function Home() {
 
               {!activeInputSpace ? (
                 <div className="mt-5 rounded-lg border border-dashed border-white/10 bg-[#080b10] px-4 py-8 text-center">
+                  <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-lg bg-cyan-300/10 text-cyan-100">
+                    <Wallet size={20} />
+                  </div>
                   <p className="text-sm text-zinc-400">
                     Pilih Pribadi atau Usaha untuk mencatat transaksi
                   </p>
                 </div>
               ) : activeInputMode === "quick" ? (
-                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/20">
-                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/10 sm:p-5">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm font-medium text-zinc-300">
                       Catat Cepat
                     </p>
                     <label
-                      className="flex items-center gap-2 text-sm text-zinc-400"
+                      className="flex min-w-0 items-center gap-2 text-sm text-zinc-400"
                       htmlFor="quick-date"
                     >
                       <CalendarDays size={16} />
                       <input
-                        className="h-9 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-36"
+                        className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-40"
                         id="quick-date"
                         onChange={(event) =>
                           setSelectedDate(event.target.value)
@@ -1733,21 +1743,21 @@ export default function Home() {
                     </label>
                   </div>
                   <textarea
-                    className="min-h-36 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600"
+                    className="min-h-44 w-full resize-none bg-transparent text-base leading-7 text-zinc-100 outline-none placeholder:text-zinc-600 sm:min-h-40"
                     onChange={(event) => {
                       setRawText(event.target.value);
                       setQuickFeedback("");
                     }}
-                    placeholder="Contoh: Penjualan nasi 350 ribu, beli bahan 125 ribu, atau bayar listrik 80 ribu"
+                    placeholder="Tulis transaksi seperti kamu mencatat di chat..."
                     value={rawText}
                   />
-                  <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-zinc-500">
                       {quickFeedback ||
                         `Disimpan ke ruang ${getSpaceLabel(activeInputSpace)}.`}
                     </p>
                     <button
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/25 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                       disabled={
                         !hasValidSelectedDate ||
                         !rawText.trim() ||
@@ -1762,7 +1772,7 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/20">
+                <div className="mt-5 rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-inner shadow-black/10 sm:p-5">
                   <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
                     <div>
                       <label
@@ -1793,7 +1803,7 @@ export default function Home() {
                       >
                         Tanggal
                       </label>
-                      <div className="mt-2 flex items-center gap-2 text-zinc-400">
+                      <div className="mt-2 flex min-w-0 items-center gap-2 text-zinc-400">
                         <CalendarDays size={16} />
                         <input
                           className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-40"
@@ -1912,10 +1922,10 @@ export default function Home() {
                         Total otomatis
                       </label>
                       <div
-                        className="mt-2 flex h-11 items-center rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-white"
+                        className="mt-2 flex h-11 items-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-white"
                         id="business-total"
                       >
-                        {formatCurrency(businessTotal)}
+                        <span className="truncate">{formatCurrency(businessTotal)}</span>
                       </div>
                     </div>
 
@@ -1990,7 +2000,7 @@ export default function Home() {
                         : "Disimpan sebagai pengeluaran kategori Bahan/Modal."}
                     </p>
                     <button
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/25 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-5 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                       disabled={!hasValidSelectedDate || !canSubmitBusiness}
                       onClick={addBusinessTransaction}
                       type="button"
@@ -2013,17 +2023,17 @@ export default function Home() {
                       Pencarian dan pengelolaan
                     </h3>
                   </div>
-                  <p className="rounded-lg border border-white/10 bg-[#080b10] px-3 py-2 text-sm text-zinc-400">
+                  <p className="w-fit max-w-full rounded-lg border border-white/10 bg-[#080b10] px-3 py-2 text-sm text-zinc-400">
                     {sortedTransactions.length} dari {filteredTransactions.length} transaksi
                   </p>
                 </div>
 
-                <div className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+                <div className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#080b10] p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
                   <label className="block">
                     <span className="text-xs font-medium text-zinc-500">
                       Search transaksi
                     </span>
-                    <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#0d1118] px-3 text-zinc-400">
+                    <div className="mt-2 flex h-11 items-center gap-2 rounded-lg border border-white/10 bg-[#0d1118] px-3 text-zinc-400">
                       <Search size={16} />
                       <input
                         className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
@@ -2042,7 +2052,7 @@ export default function Home() {
                       Kategori
                     </span>
                     <select
-                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
                       onChange={(event) =>
                         setHistoryCategoryFilter(event.target.value)
                       }
@@ -2062,7 +2072,7 @@ export default function Home() {
                       Tipe
                     </span>
                     <select
-                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
                       onChange={(event) =>
                         setHistoryTypeFilter(
                           event.target.value as HistoryTypeFilter,
@@ -2083,7 +2093,7 @@ export default function Home() {
                       Sort
                     </span>
                     <select
-                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                      className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
                       onChange={(event) =>
                         setHistorySort(event.target.value as HistorySort)
                       }
@@ -2106,7 +2116,7 @@ export default function Home() {
                     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                       {periodFilterOptions.map((option) => (
                         <button
-                          className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium transition ${
+                          className={`h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition ${
                             periodFilter === option.value
                               ? "bg-cyan-200 text-zinc-950 shadow-lg shadow-cyan-950/20"
                               : "border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
@@ -2121,12 +2131,12 @@ export default function Home() {
                     </div>
                     {periodFilter === "custom" ? (
                       <label
-                        className="flex items-center gap-2 text-sm text-zinc-400"
+                        className="flex min-w-0 items-center gap-2 text-sm text-zinc-400"
                         htmlFor="history-custom-date"
                       >
                         <CalendarDays size={16} />
                         <input
-                          className="h-10 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-44"
+                          className="h-11 w-full rounded-lg border border-white/10 bg-[#0d1118] px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 sm:w-44"
                           id="history-custom-date"
                           onChange={(event) =>
                             setHistoryCustomDate(event.target.value)
@@ -2146,11 +2156,11 @@ export default function Home() {
 
                       return (
                         <article
-                          className="rounded-lg border border-white/10 bg-[#080b10] p-4 transition hover:border-cyan-200/20 hover:bg-[#0b111a]"
+                          className="rounded-lg border border-white/10 bg-[#080b10] p-4 shadow-lg shadow-black/10 transition hover:border-cyan-200/20 hover:bg-[#0b111a] sm:p-5"
                           key={transaction.id}
                         >
                           {isEditing ? (
-                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
                               <label className="block">
                                 <span className="text-xs font-medium text-zinc-500">
                                   Nominal
@@ -2218,7 +2228,7 @@ export default function Home() {
                                   ))}
                                 </select>
                               </label>
-                              <label className="block md:col-span-2 xl:col-span-5">
+                              <label className="block md:col-span-2 2xl:col-span-5">
                                 <span className="text-xs font-medium text-zinc-500">
                                   Catatan
                                 </span>
@@ -2230,9 +2240,9 @@ export default function Home() {
                                   value={editForm.note}
                                 />
                               </label>
-                              <div className="flex flex-col gap-2 md:col-span-2 md:flex-row xl:col-span-5">
+                              <div className="flex flex-col gap-2 md:col-span-2 md:flex-row 2xl:col-span-5">
                                 <button
-                                  className="inline-flex h-10 items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100"
+                                  className="inline-flex h-11 items-center justify-center rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-100"
                                   onClick={() =>
                                     saveEditTransaction(transaction.id)
                                   }
@@ -2241,7 +2251,7 @@ export default function Home() {
                                   Simpan
                                 </button>
                                 <button
-                                  className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                                  className="inline-flex h-11 items-center justify-center rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
                                   onClick={cancelEditTransaction}
                                   type="button"
                                 >
@@ -2250,10 +2260,24 @@ export default function Home() {
                               </div>
                             </div>
                           ) : (
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="flex min-w-0 gap-3">
+                                <div
+                                  className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg ${
+                                    transaction.type === "income"
+                                      ? "bg-emerald-400/10 text-emerald-200"
+                                      : "bg-rose-400/10 text-rose-200"
+                                  }`}
+                                >
+                                  {transaction.type === "income" ? (
+                                    <ArrowUpRight size={18} />
+                                  ) : (
+                                    <ArrowDownLeft size={18} />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-medium text-white">
+                                  <p className="min-w-0 break-words font-medium text-white">
                                     {transaction.note}
                                   </p>
                                   <span
@@ -2269,17 +2293,18 @@ export default function Home() {
                                     {getSpaceLabel(transaction.space)}
                                   </span>
                                 </div>
-                                <p className="mt-1 text-sm text-zinc-500">
+                                <p className="mt-2 break-words text-sm text-zinc-500">
                                   {formatDate(transaction.date)} -{" "}
                                   {transaction.category}
                                 </p>
                                 <p className="mt-1 truncate text-sm text-zinc-600">
                                   {transaction.rawText}
                                 </p>
+                                </div>
                               </div>
-                              <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 pl-[52px] sm:justify-end sm:pl-0">
                                 <p
-                                  className={`text-right font-semibold ${
+                                  className={`min-w-0 break-words text-right text-[clamp(0.95rem,2.4vw,1.125rem)] font-semibold leading-tight ${
                                     transaction.type === "income"
                                       ? "text-emerald-300"
                                       : "text-rose-300"
@@ -2290,7 +2315,7 @@ export default function Home() {
                                 </p>
                                 <button
                                   aria-label={`Edit transaksi ${transaction.note}`}
-                                  className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-cyan-200"
+                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-cyan-200 sm:size-10"
                                   onClick={() =>
                                     startEditTransaction(transaction)
                                   }
@@ -2300,7 +2325,7 @@ export default function Home() {
                                 </button>
                                 <button
                                   aria-label={`Hapus transaksi ${transaction.note}`}
-                                  className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200"
+                                  className="flex size-11 items-center justify-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-rose-200 sm:size-10"
                                   onClick={() =>
                                     deleteTransaction(transaction.id)
                                   }
@@ -2317,14 +2342,18 @@ export default function Home() {
                   ) : (
                     <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-white/10 bg-[#080b10] px-6 text-center">
                       <div>
-                        <CreditCard
-                          className="mx-auto text-zinc-600"
-                          size={34}
-                        />
-                        <p className="mt-3 text-sm text-zinc-500">
+                        <div className="mx-auto flex size-12 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-400">
+                          <CreditCard size={24} />
+                        </div>
+                        <p className="mt-4 text-base font-medium text-zinc-200">
                           {filteredTransactions.length > 0
-                            ? "Tidak ada transaksi yang cocok dengan filter."
-                            : "Belum ada transaksi pada filter tanggal dan ruang ini."}
+                            ? "Tidak ada transaksi yang cocok"
+                            : "Belum ada transaksi"}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-500">
+                          {filteredTransactions.length > 0
+                            ? "Sesuaikan kata kunci, kategori, atau periode yang dipilih."
+                            : "Mulai catat pemasukan atau pengeluaran pertamamu."}
                         </p>
                       </div>
                     </div>
@@ -2336,16 +2365,16 @@ export default function Home() {
             {activePage === "analytics" ? (
               <>
                 <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 sm:col-span-2 lg:col-span-8 lg:p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm text-zinc-400">Grafik</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">
                     Arus uang
                   </h3>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                   <button
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white sm:h-10 sm:flex-none"
                     onClick={exportCsvReport}
                     type="button"
                   >
@@ -2353,7 +2382,7 @@ export default function Home() {
                     Export CSV
                   </button>
                   <button
-                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-cyan-200 px-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-100 sm:h-10 sm:flex-none"
                     onClick={exportPdfReport}
                     type="button"
                   >
@@ -2363,15 +2392,20 @@ export default function Home() {
                   <LineChartIcon className="hidden text-cyan-200 sm:block" size={20} />
                 </div>
               </div>
-              <div className="mt-5 h-72 rounded-lg border border-cyan-200/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_18rem),rgba(8,13,20,0.72)] p-4">
+              <div className="mt-5 h-[clamp(18rem,42vw,24rem)] overflow-hidden rounded-lg border border-cyan-200/10 bg-[linear-gradient(180deg,rgba(12,21,31,0.86),rgba(8,13,20,0.72))] p-2 sm:p-4">
                 {chartData.length > 0 ? (
                   <MoneyFlowChart data={chartData} />
                 ) : (
                   <div className="flex h-full items-center justify-center px-6 text-center">
                     <div>
-                      <BarChart3 className="mx-auto text-zinc-600" size={34} />
-                      <p className="mt-3 text-sm text-zinc-500">
-                        Grafik arus uang akan muncul setelah ada transaksi.
+                      <div className="mx-auto flex size-12 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-400">
+                        <BarChart3 size={24} />
+                      </div>
+                      <p className="mt-4 text-base font-medium text-zinc-200">
+                        Belum ada data untuk periode ini
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        Grafik arus uang akan muncul saat transaksi sudah dicatat.
                       </p>
                     </div>
                   </div>
@@ -2406,11 +2440,11 @@ export default function Home() {
                   },
                 ].map((item) => (
                   <div
-                    className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
                     key={item.label}
                   >
                     <p className="text-sm text-zinc-400">{item.label}</p>
-                    <p className={`text-sm font-semibold ${item.tone}`}>
+                    <p className={`min-w-0 break-words text-right text-sm font-semibold ${item.tone}`}>
                       {formatCurrency(item.value)}
                     </p>
                   </div>
@@ -2425,22 +2459,30 @@ export default function Home() {
                 {topExpenseCategories.length > 0 ? (
                   topExpenseCategories.map((item, index) => (
                     <div
-                      className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#080b10] px-4 py-3.5"
                       key={item.category}
                     >
                       <p className="min-w-0 truncate text-sm font-medium text-white">
                         {index + 1}. {item.category}
                       </p>
-                      <p className="shrink-0 text-sm font-semibold text-rose-300">
+                      <p className="min-w-0 shrink text-right text-sm font-semibold text-rose-300">
                         {formatCurrency(item.amount)}
                       </p>
                     </div>
                   ))
                 ) : (
                   <div className="flex min-h-36 items-center justify-center rounded-lg border border-dashed border-white/10 bg-[#080b10] px-6 text-center">
-                    <p className="text-sm text-zinc-500">
-                      Belum ada pengeluaran pada filter ini.
-                    </p>
+                    <div>
+                      <div className="mx-auto flex size-11 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-400">
+                        <ShoppingCart size={22} />
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-zinc-300">
+                        Belum ada pengeluaran
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-500">
+                        Data kategori akan muncul sesuai filter aktif.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2486,11 +2528,11 @@ export default function Home() {
                       },
                     ].map((item) => (
                       <div
-                        className="rounded-lg border border-white/10 bg-[#080b10] px-4 py-4"
+                        className="min-w-0 rounded-lg border border-white/10 bg-[#080b10] px-4 py-4"
                         key={item.label}
                       >
                         <p className="text-sm text-zinc-400">{item.label}</p>
-                        <p className={`mt-2 text-base font-semibold ${item.tone}`}>
+                        <p className={`mt-2 break-words text-[clamp(0.95rem,2vw,1rem)] font-semibold ${item.tone}`}>
                           {formatCurrency(item.value)}
                         </p>
                       </div>
@@ -2517,7 +2559,7 @@ export default function Home() {
                     className="rounded-lg border border-white/10 bg-[#080b10] px-2 py-5 text-center"
                     key={item.label}
                   >
-                    <p className="text-2xl font-semibold text-white">
+                    <p className="text-[clamp(1.35rem,4vw,1.5rem)] font-semibold text-white">
                       {item.value}
                     </p>
                     <p className="mt-1 text-xs text-zinc-500">{item.label}</p>
@@ -2540,17 +2582,6 @@ export default function Home() {
                     5 transaksi terbaru
                   </h3>
                 </div>
-                <button
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-cyan-200/20 bg-cyan-300/10 px-4 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!activeInputSpace}
-                  onClick={() =>
-                    addTransaction("Penjualan nasi 350 ribu hari ini")
-                  }
-                  type="button"
-                >
-                  <Plus size={16} />
-                  Coba contoh
-                </button>
               </div>
 
               <div className="mt-5 min-h-52 rounded-lg border border-white/10 bg-[#080b10]">
@@ -2558,12 +2589,26 @@ export default function Home() {
                   <div className="divide-y divide-white/10">
                     {latestTransactions.map((transaction) => (
                       <article
-                        className="flex flex-col gap-4 px-4 py-4 transition hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-4 px-4 py-4 transition hover:bg-white/[0.03] sm:flex-row sm:items-start sm:justify-between sm:px-5"
                         key={transaction.id}
                       >
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 gap-3">
+                          <div
+                            className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg ${
+                              transaction.type === "income"
+                                ? "bg-emerald-400/10 text-emerald-200"
+                                : "bg-rose-400/10 text-rose-200"
+                            }`}
+                          >
+                            {transaction.type === "income" ? (
+                              <ArrowUpRight size={18} />
+                            ) : (
+                              <ArrowDownLeft size={18} />
+                            )}
+                          </div>
+                          <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-white">
+                            <p className="min-w-0 break-words font-medium text-white">
                               {transaction.note}
                             </p>
                             <span
@@ -2581,17 +2626,18 @@ export default function Home() {
                               {getSpaceLabel(transaction.space)}
                             </span>
                           </div>
-                          <p className="mt-1 text-sm text-zinc-500">
+                          <p className="mt-2 break-words text-sm text-zinc-500">
                             {formatDate(transaction.date)} -{" "}
                             {transaction.category}
                           </p>
                           <p className="mt-1 truncate text-sm text-zinc-600">
                             {transaction.rawText}
                           </p>
+                          </div>
                         </div>
-                        <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 pl-[52px] sm:justify-end sm:pl-0">
                           <p
-                            className={`text-right font-semibold ${
+                            className={`min-w-0 break-words text-right text-[clamp(0.95rem,2.4vw,1.125rem)] font-semibold leading-tight ${
                               transaction.type === "income"
                                 ? "text-emerald-300"
                                 : "text-rose-300"
@@ -2607,10 +2653,14 @@ export default function Home() {
                 ) : (
                   <div className="flex min-h-52 items-center justify-center px-6 text-center">
                     <div>
-                      <CreditCard className="mx-auto text-zinc-600" size={34} />
-                      <p className="mt-3 text-sm text-zinc-500">
-                        Belum ada catatan. Tulis pemasukan, belanja pribadi,
-                        atau transaksi usaha mikro pertama.
+                      <div className="mx-auto flex size-12 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-400">
+                        <CreditCard size={24} />
+                      </div>
+                      <p className="mt-4 text-base font-medium text-zinc-200">
+                        Belum ada transaksi
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        Mulai catat pemasukan atau pengeluaran pertamamu.
                       </p>
                     </div>
                   </div>

@@ -3,12 +3,12 @@
 :root {
   --background: #0a0f14;
   --foreground: #f7fbff;
-  --card: rgba(16, 24, 34, 0.72);
-  --card-strong: rgba(20, 31, 44, 0.84);
-  --line: rgba(190, 242, 255, 0.13);
+  --card: rgba(16, 24, 34, 0.66);
+  --card-strong: rgba(20, 31, 44, 0.78);
+  --line: rgba(190, 242, 255, 0.1);
   --field: rgba(8, 13, 20, 0.72);
-  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.28);
-  --shadow-card: 0 16px 38px rgba(0, 0, 0, 0.22);
+  --shadow-soft: 0 18px 54px rgba(0, 0, 0, 0.24);
+  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.2);
 }
 
 @theme inline {
@@ -27,11 +27,10 @@
 
 body {
   background:
-    radial-gradient(circle at 12% 0%, rgba(45, 212, 191, 0.14), transparent 28rem),
-    radial-gradient(circle at 88% 8%, rgba(168, 85, 247, 0.14), transparent 26rem),
-    linear-gradient(135deg, #081018 0%, #0b111a 44%, #0c1218 100%);
+    linear-gradient(145deg, #081018 0%, #0b111a 46%, #0c1218 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
 
 button,
@@ -58,11 +57,11 @@ textarea {
 }
 
 .rounded-lg {
-  border-radius: 1.15rem;
+  border-radius: 0.5rem;
 }
 
 .rounded-md {
-  border-radius: 0.8rem;
+  border-radius: 0.45rem;
 }
 
 .border-white\/10 {
@@ -100,4 +99,8 @@ input,
 select,
 textarea {
   color-scheme: dark;
+}
+
+* {
+  min-width: 0;
 }
